@@ -1,0 +1,1485 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kanban CS — Picker Express</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  /* Picker Brand */
+  --celeste-100: #c6f3ff; --celeste-300: #31caf5; --celeste-500: #00b8eb; --celeste-800: #0099c4;
+  --azul-oscuro-300: #4a5b88; --azul-oscuro-500: #314374; --azul-oscuro-800: #1d3167; --azul-oscuro-900: #111f46;
+  --azul-500: #008cff; --azul-800: #007aeb;
+  --verde-300: #2cd5a2; --verde-500: #00c589; --verde-800: #00986d;
+  --morado-500: #646eff; --morado-800: #5c50ff;
+  --neutral-100: #eff7ff; --neutral-200: #d2e8ff; --neutral-300: #b3d5f9; --neutral-500: #92b3d6; --neutral-800: #6f8fb1;
+  --rojo: #E74C3C; --amarillo: #ffc634; --naranja: #E67E22;
+  /* Category Colors (left border) */
+  --cat-soporte_operativo: #4A90D9;
+  --cat-desbloqueo: #E67E22;
+  --cat-growth: #27AE60;
+  --cat-soporte_producto: #8E44AD;
+  --cat-producto_discovery: #0099c4;
+  /* Aging */
+  --aging-0: transparent; --aging-1: #F39C12; --aging-2: #E67E22; --aging-3: #E74C3C;
+  /* Layout */
+  --sidebar-w: 220px; --header-h: 56px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul-oscuro-500); overflow:hidden; height:100vh; }
+/* Header */
+.header { height:var(--header-h); background:var(--azul-oscuro-900); display:flex; align-items:center; padding:0 20px; gap:16px; z-index:100; position:relative; }
+.header .logo { color:#fff; font-weight:700; font-size:15px; letter-spacing:.5px; }
+.header .logo span { color:var(--celeste-500); }
+.header .cycle-badge { background:var(--celeste-500); color:#fff; font-size:12px; font-weight:600; padding:4px 12px; border-radius:20px; }
+.header .hub-link { color:var(--celeste-300); font-size:11px; text-decoration:none; border:1px solid var(--celeste-800); padding:4px 10px; border-radius:4px; transition:.2s; }
+.header .hub-link:hover { background:var(--celeste-800); color:#fff; }
+.header .views { display:flex; gap:4px; margin-left:auto; }
+.header .views button { background:transparent; border:1px solid rgba(255,255,255,.2); color:rgba(255,255,255,.7); font-size:11px; font-family:inherit; padding:5px 12px; border-radius:4px; cursor:pointer; transition:.2s; }
+.header .views button:hover, .header .views button.active { background:var(--celeste-500); color:#fff; border-color:var(--celeste-500); }
+.header .btn-new { background:var(--verde-500); color:#fff; border:none; font-family:inherit; font-size:12px; font-weight:600; padding:6px 14px; border-radius:5px; cursor:pointer; margin-left:12px; }
+.header .btn-new:hover { background:var(--verde-800); }
+.header .btn-cycle { background:transparent; border:1px solid rgba(255,255,255,.25); color:rgba(255,255,255,.8); font-family:inherit; font-size:11px; padding:5px 10px; border-radius:4px; cursor:pointer; }
+.header .btn-cycle:hover { background:rgba(255,255,255,.1); }
+/* Connection status indicator */
+.conn-status { width:10px; height:10px; border-radius:50%; flex-shrink:0; transition:background .3s; }
+.conn-status.connected { background:#00c589; }
+.conn-status.disconnected { background:#E74C3C; }
+.conn-status.connecting { background:#ffc634; }
+/* Loading overlay */
+.loading-overlay { position:fixed; inset:0; background:rgba(240,244,248,.95); z-index:500; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.loading-overlay .spinner { width:40px; height:40px; border:4px solid var(--neutral-200); border-top-color:var(--celeste-500); border-radius:50%; animation:spin .8s linear infinite; margin-bottom:16px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.loading-overlay .loading-text { font-size:14px; font-weight:600; color:var(--azul-oscuro-500); }
+.loading-overlay .loading-sub { font-size:11px; color:var(--neutral-800); margin-top:4px; }
+/* Error banner */
+.error-banner { display:none; background:#ffebee; color:#c0392b; padding:8px 16px; font-size:12px; font-weight:500; text-align:center; border-bottom:2px solid #E74C3C; }
+.error-banner.active { display:block; }
+/* Layout */
+.app { display:flex; height:calc(100vh - var(--header-h)); }
+/* Filters Sidebar */
+.sidebar { width:var(--sidebar-w); background:#fff; border-right:1px solid var(--neutral-200); padding:16px 12px; overflow-y:auto; flex-shrink:0; }
+.sidebar .filter-group { margin-bottom:6px; }
+.sidebar .filter-header { display:flex; align-items:center; justify-content:space-between; cursor:pointer; padding:6px 0; user-select:none; }
+.sidebar .filter-header h3 { font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--neutral-800); margin:0; }
+.sidebar .filter-header .toggle-arrow { font-size:10px; color:var(--neutral-500); transition:transform .2s; }
+.sidebar .filter-header .toggle-arrow.open { transform:rotate(180deg); }
+.sidebar .filter-actions { display:flex; gap:6px; margin-bottom:4px; }
+.sidebar .filter-actions button { font-size:9px; font-family:inherit; background:none; border:none; color:var(--celeste-800); cursor:pointer; padding:0; text-decoration:underline; }
+.sidebar .filter-actions button:hover { color:var(--azul-oscuro-800); }
+.sidebar .filter-body { overflow:hidden; transition:max-height .25s ease; }
+.sidebar .filter-body.collapsed { max-height:0 !important; }
+.sidebar .filter-group label { display:flex; align-items:center; gap:6px; font-size:12px; padding:3px 0; cursor:pointer; color:var(--azul-oscuro-300); }
+.sidebar .filter-group label:hover { color:var(--azul-oscuro-500); }
+.sidebar .filter-group input[type=checkbox] { accent-color:var(--celeste-500); }
+.sidebar .metrics-mini { background:var(--neutral-100); border-radius:8px; padding:10px; margin-top:12px; }
+.sidebar .metrics-mini h3 { margin-bottom:6px; }
+.sidebar .metric-row { display:flex; justify-content:space-between; font-size:11px; padding:3px 0; border-bottom:1px solid var(--neutral-200); }
+.sidebar .metric-row:last-child { border:none; }
+.sidebar .metric-val { font-weight:600; color:var(--azul-oscuro-800); }
+/* Board */
+.board { flex:1; display:flex; gap:12px; padding:16px; overflow-x:auto; }
+.column { min-width:250px; flex:1; background:#fff; border-radius:10px; display:flex; flex-direction:column; max-height:100%; box-shadow:0 1px 3px rgba(0,0,0,.06); transition:min-width .25s, flex .25s; }
+.column.collapsed { min-width:44px; flex:0 0 44px; cursor:pointer; }
+.column.collapsed .column-body { display:none; }
+.column.collapsed .column-header { writing-mode:vertical-rl; text-orientation:mixed; padding:14px 8px; justify-content:flex-start; gap:8px; border-bottom:none; border-radius:10px; height:100%; }
+.column.collapsed .column-header .col-collapse-btn { transform:rotate(90deg); }
+.column-header { padding:12px 14px; font-size:13px; font-weight:700; display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--neutral-200); border-radius:10px 10px 0 0; }
+.column-header .count { background:var(--neutral-200); font-size:11px; font-weight:600; padding:2px 8px; border-radius:10px; }
+.column-header .col-collapse-btn { background:none; border:none; cursor:pointer; font-size:14px; color:var(--neutral-500); padding:0 2px; line-height:1; }
+.column-header .col-collapse-btn:hover { color:var(--azul-oscuro-500); }
+.column-header .col-right { display:flex; align-items:center; gap:6px; }
+.column[data-col="backlog"] .column-header { border-bottom-color:var(--neutral-500); }
+.column[data-col="pendiente"] .column-header { border-bottom-color:var(--celeste-500); }
+.column[data-col="en_progreso"] .column-header { border-bottom-color:var(--azul-500); }
+.column[data-col="bloqueado"] .column-header { border-bottom-color:var(--amarillo); }
+.column[data-col="completado"] .column-header { border-bottom-color:var(--verde-500); }
+.column-body { flex:1; overflow-y:auto; padding:8px; min-height:60px; }
+.column-body.drag-over { background:var(--celeste-100); }
+/* Card */
+.card { background:#fff; border-radius:8px; padding:10px 12px; margin-bottom:8px; cursor:grab; border:1px solid var(--neutral-200); border-left:4px solid var(--neutral-500); transition:box-shadow .15s, transform .15s; position:relative; }
+.card:hover { box-shadow:0 3px 10px rgba(0,0,0,.1); transform:translateY(-1px); }
+.card.dragging { opacity:.5; transform:rotate(2deg); }
+/* Category color = left border */
+.card[data-category="soporte_operativo"] { border-left-color:var(--cat-soporte_operativo); }
+.card[data-category="desbloqueo"] { border-left-color:var(--cat-desbloqueo); }
+.card[data-category="growth"] { border-left-color:var(--cat-growth); }
+.card[data-category="soporte_producto"] { border-left-color:var(--cat-soporte_producto); }
+.card[data-category="producto_discovery"] { border-left-color:var(--cat-producto_discovery); }
+/* Aging indicator */
+.card .aging-bar { position:absolute; top:0; right:0; width:6px; height:100%; border-radius:0 8px 8px 0; }
+.card[data-aging="1"] .aging-bar { background:var(--aging-1); }
+.card[data-aging="2"] .aging-bar { background:var(--aging-2); }
+.card[data-aging="3"] .aging-bar { background:var(--aging-3); }
+.card[data-aging="3"] { border-color:rgba(231,76,60,.3); background:rgba(231,76,60,.03); }
+.card .aging-badge { display:none; font-size:9px; font-weight:700; padding:1px 5px; border-radius:3px; color:#fff; position:absolute; top:6px; right:10px; }
+.card[data-aging="1"] .aging-badge { display:inline-block; background:var(--aging-1); }
+.card[data-aging="2"] .aging-badge { display:inline-block; background:var(--aging-2); }
+.card[data-aging="3"] .aging-badge { display:inline-block; background:var(--aging-3); }
+/* Card content */
+.card .card-workspace { font-size:10px; font-weight:700; color:var(--azul-oscuro-900); background:var(--neutral-100); border:1px solid var(--neutral-200); padding:3px 7px; border-radius:4px; margin-bottom:5px; margin-right:30px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:inline-block; max-width:calc(100% - 30px); }
+.card .card-title { font-size:12px; font-weight:600; line-height:1.35; margin-bottom:6px; padding-right:30px; }
+.card .tags { display:flex; flex-wrap:wrap; gap:3px; margin-bottom:6px; }
+.card .tag { font-size:9px; padding:2px 6px; border-radius:3px; font-weight:500; }
+.tag-pais { background:#e8f4fd; color:#2980b9; }
+.tag-tier { background:#fef3e2; color:#e67e22; }
+.tag-estado-piloto { background:#fce4ec; color:#c0392b; }
+.tag-estado-activo { background:#e8f5e9; color:#27ae60; }
+.tag-estado-riesgo { background:#ffebee; color:#e74c3c; }
+.tag-origen-reactivo { background:#ffebee; color:#e74c3c; font-weight:700; }
+.tag-motion-rollout { background:#e8f0fe; color:#1a56db; font-weight:600; }
+.tag-motion-expansion { background:#ecfdf3; color:#166534; font-weight:600; }
+.tag-module { background:#f3e8ff; color:#7c3aed; font-weight:500; }
+.card .card-footer { display:flex; justify-content:space-between; align-items:center; margin-top:4px; }
+.card .card-assignee { font-size:10px; color:var(--neutral-800); display:flex; align-items:center; gap:4px; }
+.card .card-assignee .avatar { width:18px; height:18px; border-radius:50%; background:var(--azul-oscuro-300); color:#fff; display:flex; align-items:center; justify-content:center; font-size:8px; font-weight:700; }
+.card .card-due { font-size:10px; color:var(--neutral-800); }
+.card .card-due.overdue { color:var(--rojo); font-weight:600; }
+.card .card-blocked { font-size:10px; color:var(--rojo); background:#ffebee; padding:3px 6px; border-radius:3px; margin-top:4px; }
+/* Limit warning */
+.limit-warning { font-size:10px; color:var(--rojo); background:#ffebee; padding:3px 8px; border-radius:4px; font-weight:600; display:inline-block; margin-left:8px; }
+/* Grouped views */
+.grouped-view { flex:1; padding:16px; overflow-y:auto; display:none; }
+.grouped-view.active { display:block; }
+.group-section { margin-bottom:20px; }
+.group-section h2 { font-size:14px; font-weight:700; color:var(--azul-oscuro-800); padding:8px 12px; background:#fff; border-radius:8px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; border-left:4px solid var(--celeste-500); flex-wrap:wrap; gap:4px; }
+.group-section h2 .group-count { font-size:11px; font-weight:500; color:var(--neutral-800); }
+.group-cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:8px; }
+.group-cards .card { cursor:pointer; }
+/* AM sub-group in account view */
+.am-subgroup { margin-bottom:10px; padding:8px; background:var(--neutral-100); border-radius:6px; }
+.am-subgroup-header { font-size:11px; font-weight:600; color:var(--azul-oscuro-500); margin-bottom:6px; display:flex; align-items:center; gap:6px; }
+/* Metrics Panel */
+.metrics-panel { display:none; flex:1; padding:20px; overflow-y:auto; }
+.metrics-panel.active { display:block; }
+.metrics-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:16px; margin-bottom:24px; }
+.metric-card { background:#fff; border-radius:10px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+.metric-card .metric-label { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--neutral-800); margin-bottom:4px; }
+.metric-card .metric-value { font-size:28px; font-weight:700; color:var(--azul-oscuro-800); }
+.metric-card .metric-sub { font-size:11px; color:var(--neutral-500); margin-top:2px; }
+/* Modal */
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:200; justify-content:center; align-items:center; }
+.modal-overlay.active { display:flex; }
+.modal { background:#fff; border-radius:12px; width:520px; max-height:85vh; overflow-y:auto; padding:24px; box-shadow:0 20px 60px rgba(0,0,0,.2); }
+.modal h2 { font-size:16px; font-weight:700; margin-bottom:16px; color:var(--azul-oscuro-800); }
+.modal .form-row { margin-bottom:12px; }
+.modal .form-row label { display:block; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:var(--neutral-800); margin-bottom:4px; }
+.modal .form-row input, .modal .form-row select, .modal .form-row textarea {
+  width:100%; padding:8px 10px; border:1px solid var(--neutral-300); border-radius:6px; font-family:inherit; font-size:13px; color:var(--azul-oscuro-500);
+}
+.modal .form-row textarea { height:60px; resize:vertical; }
+.modal .form-row select { appearance:auto; }
+.modal .form-actions { display:flex; gap:8px; margin-top:16px; justify-content:flex-end; }
+.modal .form-actions button { padding:8px 16px; border-radius:6px; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; border:none; }
+.modal .btn-save { background:var(--celeste-500); color:#fff; }
+.modal .btn-save:hover { background:var(--celeste-800); }
+.modal .btn-cancel { background:var(--neutral-100); color:var(--azul-oscuro-500); }
+.modal .btn-delete { background:var(--rojo); color:#fff; margin-right:auto; }
+.modal .btn-delete:hover { background:#c0392b; }
+.modal .form-row-inline { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+/* Cycle Modal */
+.cycle-modal .cycle-stats { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
+.cycle-modal .stat-box { background:var(--neutral-100); padding:10px; border-radius:6px; text-align:center; }
+.cycle-modal .stat-box .stat-val { font-size:22px; font-weight:700; color:var(--azul-oscuro-800); }
+.cycle-modal .stat-box .stat-label { font-size:10px; color:var(--neutral-800); }
+/* Responsive */
+@media (max-width:900px) {
+  .sidebar { display:none; }
+  .column { min-width:200px; }
+}
+/* Scrollbar */
+::-webkit-scrollbar { width:6px; height:6px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--neutral-300); border-radius:3px; }
+/* Legend bar */
+.legend { display:flex; gap:12px; align-items:center; padding:6px 16px; background:#fff; border-bottom:1px solid var(--neutral-200); font-size:10px; overflow-x:auto; flex-shrink:0; }
+.legend .legend-item { display:flex; align-items:center; gap:4px; white-space:nowrap; }
+.legend .legend-color { width:12px; height:12px; border-radius:2px; }
+.legend .legend-sep { width:1px; height:14px; background:var(--neutral-200); }
+.legend .aging-legend { display:flex; align-items:center; gap:3px; }
+.legend .aging-dot { width:8px; height:8px; border-radius:50%; }
+</style>
+</head>
+<body>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text">Cargando...</div>
+  <div class="loading-sub">Conectando con Supabase</div>
+</div>
+
+<!-- Error Banner -->
+<div class="error-banner" id="errorBanner"></div>
+
+<!-- Header -->
+<div class="header">
+  <div class="logo"><span>Picker</span> CS Kanban</div>
+  <div class="conn-status connecting" id="connStatus" title="Conectando..."></div>
+  <div class="cycle-badge" id="cycleBadge">Ciclo 5 (Sem 8-9)</div>
+  <a class="hub-link" href="#" id="hubLink" title="Ir a Tareas Hub">Tareas Hub &rarr;</a>
+  <div class="views">
+    <button class="active" data-view="board">Board</button>
+    <button data-view="by-account">Por Cuenta</button>
+    <button data-view="by-person">Por Responsable</button>
+    <button data-view="by-motion">Por Motion</button>
+    <button data-view="urgentes">Reactivos</button>
+    <button data-view="metrics">Metricas</button>
+  </div>
+  <button class="btn-cycle" onclick="openCycleModal()">Ciclo</button>
+  <button class="btn-new" onclick="openNewCardModal()">+ Compromiso</button>
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="legend-item"><div class="legend-color" style="background:var(--cat-soporte_operativo)"></div>Soporte Op.</div>
+  <div class="legend-item"><div class="legend-color" style="background:var(--cat-desbloqueo)"></div>Desbloqueo</div>
+  <div class="legend-item"><div class="legend-color" style="background:var(--cat-growth)"></div>Growth</div>
+  <div class="legend-item"><div class="legend-color" style="background:var(--cat-soporte_producto)"></div>Soporte Prod.</div>
+  <div class="legend-item"><div class="legend-color" style="background:var(--cat-producto_discovery)"></div>Prod. Discovery</div>
+  <div class="legend-sep"></div>
+  <div class="aging-legend"><div class="aging-dot" style="background:var(--aging-1)"></div>1 ciclo</div>
+  <div class="aging-legend"><div class="aging-dot" style="background:var(--aging-2)"></div>2 ciclos</div>
+  <div class="aging-legend"><div class="aging-dot" style="background:var(--aging-3)"></div>3+ ciclos</div>
+</div>
+
+<!-- App -->
+<div class="app">
+  <!-- Sidebar Filters -->
+  <div class="sidebar">
+    <div class="filter-group" data-group="assignee">
+      <div class="filter-header" onclick="toggleFilterGroup(this)">
+        <h3>Responsable</h3><span class="toggle-arrow open">&#9660;</span>
+      </div>
+      <div class="filter-body">
+        <div class="filter-actions">
+          <button onclick="selectAllFilter('assignee')">Todos</button>
+          <button onclick="deselectAllFilter('assignee')">Ninguno</button>
+        </div>
+        <label><input type="checkbox" class="filter" data-filter="assignee" data-val="Juan Xavier" checked> Juan Xavier</label>
+        <label><input type="checkbox" class="filter" data-filter="assignee" data-val="Carlos Merino" checked> Carlos Merino</label>
+        <label><input type="checkbox" class="filter" data-filter="assignee" data-val="Stephanie Acosta" checked> Stephanie</label>
+        <label><input type="checkbox" class="filter" data-filter="assignee" data-val="Antonio Pazmino" checked> Antonio</label>
+      </div>
+    </div>
+    <div class="filter-group" data-group="category">
+      <div class="filter-header" onclick="toggleFilterGroup(this)">
+        <h3>Categoria</h3><span class="toggle-arrow open">&#9660;</span>
+      </div>
+      <div class="filter-body">
+        <div class="filter-actions">
+          <button onclick="selectAllFilter('category')">Todos</button>
+          <button onclick="deselectAllFilter('category')">Ninguno</button>
+        </div>
+        <label><input type="checkbox" class="filter" data-filter="category" data-val="soporte_operativo" checked> Soporte Operativo</label>
+        <label><input type="checkbox" class="filter" data-filter="category" data-val="desbloqueo" checked> Desbloqueo</label>
+        <label><input type="checkbox" class="filter" data-filter="category" data-val="growth" checked> Growth</label>
+        <label><input type="checkbox" class="filter" data-filter="category" data-val="soporte_producto" checked> Soporte Producto</label>
+        <label><input type="checkbox" class="filter" data-filter="category" data-val="producto_discovery" checked> Producto Discovery</label>
+      </div>
+    </div>
+    <div class="filter-group" data-group="motion">
+      <div class="filter-header" onclick="toggleFilterGroup(this)">
+        <h3>Motion</h3><span class="toggle-arrow open">&#9660;</span>
+      </div>
+      <div class="filter-body">
+        <div class="filter-actions">
+          <button onclick="selectAllFilter('motion')">Todos</button>
+          <button onclick="deselectAllFilter('motion')">Ninguno</button>
+        </div>
+        <label><input type="checkbox" class="filter" data-filter="motion" data-val="expansion" checked> Expansion</label>
+        <label><input type="checkbox" class="filter" data-filter="motion" data-val="rollout" checked> RollOut</label>
+      </div>
+    </div>
+    <div class="filter-group" data-group="country">
+      <div class="filter-header" onclick="toggleFilterGroup(this)">
+        <h3>Pais</h3><span class="toggle-arrow open">&#9660;</span>
+      </div>
+      <div class="filter-body">
+        <div class="filter-actions">
+          <button onclick="selectAllFilter('country')">Todos</button>
+          <button onclick="deselectAllFilter('country')">Ninguno</button>
+        </div>
+        <label><input type="checkbox" class="filter" data-filter="country" data-val="EC" checked> EC</label>
+        <label><input type="checkbox" class="filter" data-filter="country" data-val="CO" checked> CO</label>
+        <label><input type="checkbox" class="filter" data-filter="country" data-val="MX" checked> MX</label>
+        <label><input type="checkbox" class="filter" data-filter="country" data-val="PE" checked> PE</label>
+        <label><input type="checkbox" class="filter" data-filter="country" data-val="CL" checked> CL</label>
+        <label><input type="checkbox" class="filter" data-filter="country" data-val="CR" checked> CR</label>
+      </div>
+    </div>
+    <div class="filter-group" data-group="tier">
+      <div class="filter-header" onclick="toggleFilterGroup(this)">
+        <h3>Tier</h3><span class="toggle-arrow open">&#9660;</span>
+      </div>
+      <div class="filter-body">
+        <div class="filter-actions">
+          <button onclick="selectAllFilter('tier')">Todos</button>
+          <button onclick="deselectAllFilter('tier')">Ninguno</button>
+        </div>
+        <label><input type="checkbox" class="filter" data-filter="tier" data-val="T1-P" checked> T1-P (Piloto)</label>
+        <label><input type="checkbox" class="filter" data-filter="tier" data-val="T1" checked> T1</label>
+        <label><input type="checkbox" class="filter" data-filter="tier" data-val="T2" checked> T2</label>
+        <label><input type="checkbox" class="filter" data-filter="tier" data-val="T3" checked> T3</label>
+      </div>
+    </div>
+    <div class="filter-group" data-group="origin">
+      <div class="filter-header" onclick="toggleFilterGroup(this)">
+        <h3>Origen</h3><span class="toggle-arrow open">&#9660;</span>
+      </div>
+      <div class="filter-body">
+        <div class="filter-actions">
+          <button onclick="selectAllFilter('origin')">Todos</button>
+          <button onclick="deselectAllFilter('origin')">Ninguno</button>
+        </div>
+        <label><input type="checkbox" class="filter" data-filter="origin" data-val="planificado" checked> Planificado</label>
+        <label><input type="checkbox" class="filter" data-filter="origin" data-val="reactivo" checked> Reactivo</label>
+      </div>
+    </div>
+    <!-- Mini Metrics -->
+    <div class="metrics-mini" id="miniMetrics">
+      <h3 style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--neutral-800);margin-bottom:6px;">Ciclo Actual</h3>
+      <div class="metric-row"><span>Completadas</span><span class="metric-val" id="m-completed">0</span></div>
+      <div class="metric-row"><span>En progreso</span><span class="metric-val" id="m-progress">0</span></div>
+      <div class="metric-row"><span>Bloqueadas</span><span class="metric-val" id="m-blocked">0</span></div>
+      <div class="metric-row"><span>% Completitud</span><span class="metric-val" id="m-pct">0%</span></div>
+      <div class="metric-row"><span>Ratio Plan/React</span><span class="metric-val" id="m-ratio">-</span></div>
+    </div>
+  </div>
+
+  <!-- Board View -->
+  <div class="board" id="boardView">
+    <div class="column" data-col="backlog">
+      <div class="column-header">Backlog <div class="col-right"><span class="count" id="cnt-backlog">0</span><button class="col-collapse-btn" onclick="toggleColumn(this)" title="Minimizar">&#9664;</button></div></div>
+      <div class="column-body" data-col="backlog"></div>
+    </div>
+    <div class="column" data-col="pendiente">
+      <div class="column-header">Pendiente <div class="col-right"><span class="count" id="cnt-pendiente">0</span><button class="col-collapse-btn" onclick="toggleColumn(this)" title="Minimizar">&#9664;</button></div></div>
+      <div class="column-body" data-col="pendiente"></div>
+    </div>
+    <div class="column" data-col="en_progreso">
+      <div class="column-header">En Progreso <div class="col-right"><span class="count" id="cnt-en_progreso">0</span><button class="col-collapse-btn" onclick="toggleColumn(this)" title="Minimizar">&#9664;</button></div></div>
+      <div class="column-body" data-col="en_progreso"></div>
+    </div>
+    <div class="column" data-col="bloqueado">
+      <div class="column-header">Bloqueado <div class="col-right"><span class="count" id="cnt-bloqueado">0</span><button class="col-collapse-btn" onclick="toggleColumn(this)" title="Minimizar">&#9664;</button></div></div>
+      <div class="column-body" data-col="bloqueado"></div>
+    </div>
+    <div class="column" data-col="completado">
+      <div class="column-header">Completado <div class="col-right"><span class="count" id="cnt-completado">0</span><button class="col-collapse-btn" onclick="toggleColumn(this)" title="Minimizar">&#9664;</button></div></div>
+      <div class="column-body" data-col="completado"></div>
+    </div>
+  </div>
+
+  <!-- Grouped Views -->
+  <div class="grouped-view" id="byAccountView"></div>
+  <div class="grouped-view" id="byPersonView"></div>
+  <div class="grouped-view" id="byMotionView"></div>
+  <div class="grouped-view" id="urgentesView"></div>
+
+  <!-- Metrics View -->
+  <div class="metrics-panel" id="metricsView"></div>
+</div>
+
+<!-- Card Modal -->
+<div class="modal-overlay" id="cardModal">
+  <div class="modal">
+    <h2 id="modalTitle">Nuevo Compromiso</h2>
+    <input type="hidden" id="cardId">
+    <div class="form-row">
+      <label>Titulo (verbo + objeto)</label>
+      <input type="text" id="cardTitle" placeholder="Ej: Enviar mail evidencia Pizza Hut">
+    </div>
+    <div class="form-row form-row-inline">
+      <div>
+        <label>Cuenta / Workspace</label>
+        <input type="text" id="cardWorkspace" placeholder="Ej: Grupo CEBA">
+      </div>
+      <div>
+        <label>Responsable</label>
+        <select id="cardAssignee">
+          <option value="Juan Xavier">Juan Xavier</option>
+          <option value="Carlos Merino">Carlos Merino</option>
+          <option value="Stephanie Acosta">Stephanie Acosta</option>
+          <option value="Antonio Pazmino">Antonio Pazmino</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row form-row-inline">
+      <div>
+        <label>Categoria</label>
+        <select id="cardCategory">
+          <option value="soporte_operativo">Soporte Operativo</option>
+          <option value="desbloqueo">Desbloqueo</option>
+          <option value="growth">Growth</option>
+          <option value="soporte_producto">Soporte Producto</option>
+          <option value="producto_discovery">Producto Discovery</option>
+        </select>
+      </div>
+      <div>
+        <label>Motion</label>
+        <select id="cardMotion">
+          <option value="expansion">Expansion</option>
+          <option value="rollout">RollOut</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row form-row-inline">
+      <div>
+        <label>Modulo (opcional)</label>
+        <input type="text" id="cardModule" placeholder="Ej: MyFleet, Flows, Analytics">
+      </div>
+      <div>
+        <label>Fecha limite</label>
+        <input type="date" id="cardDue">
+      </div>
+    </div>
+    <div class="form-row form-row-inline">
+      <div>
+        <label>Pais</label>
+        <select id="cardCountry">
+          <option value="EC">EC</option>
+          <option value="CO">CO</option>
+          <option value="MX">MX</option>
+          <option value="PE">PE</option>
+          <option value="CL">CL</option>
+          <option value="CR">CR</option>
+          <option value="PA">PA</option>
+        </select>
+      </div>
+      <div>
+        <label>Tier</label>
+        <select id="cardTier">
+          <option value="T1-P">T1-P</option>
+          <option value="T1">T1</option>
+          <option value="T2">T2</option>
+          <option value="T3">T3</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row form-row-inline">
+      <div>
+        <label>Estado cliente</label>
+        <select id="cardClientStatus">
+          <option value="activo">Activo</option>
+          <option value="piloto">Piloto</option>
+          <option value="en_riesgo">En Riesgo</option>
+        </select>
+      </div>
+      <div>
+        <label>Origen</label>
+        <select id="cardOrigin">
+          <option value="planificado">Planificado</option>
+          <option value="reactivo">Reactivo</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <label>Bloqueado por (solo si aplica)</label>
+      <input type="text" id="cardBlockedBy" placeholder="Ej: Esperando respuesta de cliente">
+    </div>
+    <div class="form-row">
+      <label>Notas / Contexto</label>
+      <textarea id="cardNotes" placeholder="Detalle adicional, links, IDs..."></textarea>
+    </div>
+    <div class="form-row">
+      <label>Ciclo de creacion</label>
+      <input type="number" id="cardCreatedCycle" min="1" value="5">
+    </div>
+    <div class="form-actions">
+      <button class="btn-delete" id="btnDelete" style="display:none" onclick="deleteCard()">Eliminar</button>
+      <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="btn-save" onclick="saveCard()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cycle Modal -->
+<div class="modal-overlay" id="cycleModal">
+  <div class="modal cycle-modal">
+    <h2>Gestion de Ciclos</h2>
+    <div class="form-row form-row-inline">
+      <div>
+        <label>Ciclo actual</label>
+        <input type="number" id="cycleNumber" min="1">
+      </div>
+      <div>
+        <label>Semanas</label>
+        <input type="text" id="cycleWeeks" placeholder="Ej: 8-9">
+      </div>
+    </div>
+    <div class="cycle-stats" id="cycleStats"></div>
+    <div class="form-actions">
+      <button class="btn-cancel" onclick="closeCycleModal()">Cerrar</button>
+      <button class="btn-save" onclick="closeCycle()">Cerrar Ciclo y Abrir Nuevo</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============== SUPABASE CONFIG ==============
+const SUPABASE_URL = 'https://jgeiubwqxvgxpedgsvcc.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnZWl1YndxeHZneHBlZGdzdmNjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0MDE5MTUsImV4cCI6MjA4Nzk3NzkxNX0.F7EKyMnXlbIdpQajqIMURhjzBUiV7_bLA4TJpd-rL_Q';
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ============== STATE ==============
+let cards = [];
+let currentCycle = { number: 5, weeks: '8-9' };
+let currentView = 'board';
+let draggedCardId = null;
+let isConnected = false;
+
+// ============== DB <-> JS FIELD MAPPING ==============
+function dbToJs(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    workspace: row.workspace,
+    assignee: row.assignee,
+    category: row.category,
+    motion: row.motion,
+    status: row.status,
+    country: row.country,
+    tier: row.tier,
+    clientStatus: row.client_status,
+    origin: row.origin,
+    dueDate: row.due_date || '',
+    blockedBy: row.blocked_by || '',
+    notes: row.notes || '',
+    module: row.module || '',
+    createdCycle: row.created_cycle,
+  };
+}
+
+function jsToDb(card) {
+  const row = {
+    title: card.title,
+    workspace: card.workspace,
+    assignee: card.assignee,
+    category: card.category,
+    motion: card.motion,
+    status: card.status,
+    country: card.country,
+    tier: card.tier,
+    client_status: card.clientStatus,
+    origin: card.origin,
+    due_date: card.dueDate || null,
+    blocked_by: card.blockedBy || null,
+    notes: card.notes || null,
+    module: card.module || null,
+    created_cycle: card.createdCycle,
+  };
+  if (card.id) row.id = card.id;
+  return row;
+}
+
+// ============== CONNECTION STATUS ==============
+function setConnectionStatus(status) {
+  const el = document.getElementById('connStatus');
+  el.className = 'conn-status ' + status;
+  const titles = { connected: 'Conectado a Supabase', disconnected: 'Desconectado', connecting: 'Conectando...' };
+  el.title = titles[status] || status;
+  isConnected = status === 'connected';
+}
+
+function showError(msg) {
+  const banner = document.getElementById('errorBanner');
+  banner.textContent = msg;
+  banner.classList.add('active');
+  setTimeout(() => banner.classList.remove('active'), 8000);
+}
+
+function hideLoading() {
+  const overlay = document.getElementById('loadingOverlay');
+  if (overlay) overlay.remove();
+}
+
+// ============== SUPABASE DATA OPERATIONS ==============
+async function loadState() {
+  try {
+    // Fetch cards
+    const { data: cardRows, error: cardsErr } = await supabase
+      .from('kanban_cards')
+      .select('*')
+      .order('created_at', { ascending: true });
+
+    if (cardsErr) throw cardsErr;
+    cards = (cardRows || []).map(dbToJs);
+
+    // Fetch current cycle
+    const { data: cycleRows, error: cycleErr } = await supabase
+      .from('kanban_cycles')
+      .select('*')
+      .eq('is_current', true)
+      .limit(1);
+
+    if (cycleErr) throw cycleErr;
+    if (cycleRows && cycleRows.length > 0) {
+      currentCycle = {
+        id: cycleRows[0].id,
+        number: cycleRows[0].cycle_number,
+        weeks: cycleRows[0].weeks,
+      };
+    }
+
+    setConnectionStatus('connected');
+  } catch (err) {
+    console.error('loadState error:', err);
+    setConnectionStatus('disconnected');
+    showError('Error al cargar datos de Supabase: ' + (err.message || err));
+    throw err;
+  }
+}
+
+async function createCard(card) {
+  try {
+    const row = jsToDb(card);
+    delete row.id; // Let Supabase generate UUID
+    const { data, error } = await supabase
+      .from('kanban_cards')
+      .insert(row)
+      .select()
+      .single();
+
+    if (error) throw error;
+    const newCard = dbToJs(data);
+    cards.push(newCard);
+    return newCard;
+  } catch (err) {
+    console.error('createCard error:', err);
+    showError('Error al crear tarjeta: ' + (err.message || err));
+    throw err;
+  }
+}
+
+async function updateCard(card) {
+  try {
+    const row = jsToDb(card);
+    const id = row.id;
+    delete row.id;
+    const { error } = await supabase
+      .from('kanban_cards')
+      .update(row)
+      .eq('id', id);
+
+    if (error) throw error;
+
+    // Update local state
+    const idx = cards.findIndex(c => c.id === card.id);
+    if (idx !== -1) cards[idx] = { ...card };
+  } catch (err) {
+    console.error('updateCard error:', err);
+    showError('Error al actualizar tarjeta: ' + (err.message || err));
+    throw err;
+  }
+}
+
+async function removeCard(id) {
+  try {
+    const { error } = await supabase
+      .from('kanban_cards')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    cards = cards.filter(c => c.id !== id);
+  } catch (err) {
+    console.error('removeCard error:', err);
+    showError('Error al eliminar tarjeta: ' + (err.message || err));
+    throw err;
+  }
+}
+
+async function updateCycle(cycle) {
+  try {
+    const { error } = await supabase
+      .from('kanban_cycles')
+      .update({ cycle_number: cycle.number, weeks: cycle.weeks })
+      .eq('id', cycle.id);
+
+    if (error) throw error;
+  } catch (err) {
+    console.error('updateCycle error:', err);
+    showError('Error al actualizar ciclo: ' + (err.message || err));
+    throw err;
+  }
+}
+
+// ============== CATEGORY MAPPING ==============
+const CATEGORY_LABELS = {
+  soporte_operativo: 'Soporte Op.',
+  desbloqueo: 'Desbloqueo',
+  growth: 'Growth',
+  soporte_producto: 'Soporte Prod.',
+  producto_discovery: 'Prod. Discovery'
+};
+
+const MOTION_LABELS = { expansion: 'Expansion', rollout: 'RollOut' };
+
+// ============== INIT ==============
+async function init() {
+  try {
+    setConnectionStatus('connecting');
+    await loadState();
+    hideLoading();
+    renderAll();
+    setupDragDrop();
+    setupFilters();
+    setupViews();
+
+    // Realtime subscription
+    supabase.channel('kanban-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'kanban_cards' }, () => {
+        loadState().then(() => renderAll()).catch(() => {});
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'kanban_cycles' }, () => {
+        loadState().then(() => renderAll()).catch(() => {});
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setConnectionStatus('connected');
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          setConnectionStatus('disconnected');
+        }
+      });
+
+  } catch (err) {
+    hideLoading();
+    showError('No se pudo conectar con Supabase. Verifica la URL y la clave en el codigo.');
+  }
+}
+
+// ============== RENDER ==============
+function renderAll() {
+  renderBoard();
+  renderGroupedViews();
+  renderMetrics();
+  updateMiniMetrics();
+  updateCycleBadge();
+}
+
+function getAging(card) {
+  if (!card.createdCycle) return 0;
+  const diff = currentCycle.number - card.createdCycle;
+  if (diff >= 3) return 3;
+  if (diff >= 2) return 2;
+  if (diff >= 1) return 1;
+  return 0;
+}
+
+function agingLabel(n) {
+  if (n===1) return '1 ciclo';
+  if (n===2) return '2 ciclos';
+  if (n>=3) return '3+ ciclos';
+  return '';
+}
+
+function isCardVisible(card) {
+  const filters = getActiveFilters();
+  if (!filters.assignee.includes(card.assignee)) return false;
+  if (!filters.category.includes(card.category)) return false;
+  if (!filters.motion.includes(card.motion)) return false;
+  if (!filters.country.includes(card.country)) return false;
+  if (!filters.tier.includes(card.tier)) return false;
+  if (!filters.origin.includes(card.origin)) return false;
+  return true;
+}
+
+function getActiveFilters() {
+  const f = { assignee:[], category:[], motion:[], country:[], tier:[], origin:[] };
+  document.querySelectorAll('.filter:checked').forEach(cb => {
+    const key = cb.dataset.filter;
+    if (f[key]) f[key].push(cb.dataset.val);
+  });
+  return f;
+}
+
+function renderCardHTML(card) {
+  const aging = card.status === 'completado' ? 0 : getAging(card);
+  const isOverdue = card.dueDate && new Date(card.dueDate) < new Date() && card.status !== 'completado';
+  const countryFlags = { EC:'\ud83c\uddea\ud83c\udde8', CO:'\ud83c\udde8\ud83c\uddf4', MX:'\ud83c\uddf2\ud83c\uddfd', PE:'\ud83c\uddf5\ud83c\uddea', CL:'\ud83c\udde8\ud83c\uddf1', CR:'\ud83c\udde8\ud83c\uddf7', PA:'\ud83c\uddf5\ud83c\udde6' };
+  const avatarInitials = card.assignee ? card.assignee.split(' ').map(w=>w[0]).join('') : '?';
+  const statusLabels = { piloto:'Piloto', activo:'Activo', en_riesgo:'En Riesgo' };
+
+  let html = `<div class="card" draggable="true" data-id="${card.id}" data-category="${card.category}" data-aging="${aging}" ondblclick="openEditCard('${card.id}')">`;
+  html += `<div class="aging-bar"></div>`;
+  if (aging > 0) html += `<div class="aging-badge">${agingLabel(aging)}</div>`;
+
+  // Workspace name (client)
+  html += `<div class="card-workspace">${card.workspace}</div>`;
+
+  // Title
+  html += `<div class="card-title">${card.title}</div>`;
+
+  // Tags
+  html += `<div class="tags">`;
+  if (card.motion) html += `<span class="tag tag-motion-${card.motion}">${MOTION_LABELS[card.motion]||card.motion}</span>`;
+  if (card.country) html += `<span class="tag tag-pais">${countryFlags[card.country]||''} ${card.country}</span>`;
+  if (card.tier) html += `<span class="tag tag-tier">${card.tier}</span>`;
+  if (card.clientStatus) html += `<span class="tag tag-estado-${card.clientStatus}">${statusLabels[card.clientStatus]||card.clientStatus}</span>`;
+  if (card.origin === 'reactivo') html += `<span class="tag tag-origen-reactivo">Reactivo</span>`;
+  if (card.module) html += `<span class="tag tag-module">${card.module}</span>`;
+  html += `</div>`;
+
+  // Blocked
+  if (card.blockedBy && card.status === 'bloqueado') {
+    html += `<div class="card-blocked">Bloqueado: ${card.blockedBy}</div>`;
+  }
+
+  // Footer
+  html += `<div class="card-footer">`;
+  html += `<div class="card-assignee"><div class="avatar">${avatarInitials}</div>${card.assignee}</div>`;
+  if (card.dueDate) {
+    html += `<div class="card-due ${isOverdue?'overdue':''}">${card.dueDate}</div>`;
+  }
+  html += `</div>`;
+  html += `</div>`;
+  return html;
+}
+
+function renderBoard() {
+  const cols = ['backlog','pendiente','en_progreso','bloqueado','completado'];
+  cols.forEach(col => {
+    const body = document.querySelector(`.column-body[data-col="${col}"]`);
+    const visible = cards.filter(c => c.status === col && isCardVisible(c));
+    body.innerHTML = visible.map(c => renderCardHTML(c)).join('');
+    document.getElementById(`cnt-${col}`).textContent = visible.length;
+  });
+  // Re-attach drag events
+  document.querySelectorAll('.card[draggable]').forEach(el => {
+    el.addEventListener('dragstart', onDragStart);
+    el.addEventListener('dragend', onDragEnd);
+  });
+}
+
+// ============== DRAG & DROP ==============
+function setupDragDrop() {
+  document.querySelectorAll('.column-body').forEach(body => {
+    body.addEventListener('dragover', e => { e.preventDefault(); body.classList.add('drag-over'); });
+    body.addEventListener('dragleave', () => body.classList.remove('drag-over'));
+    body.addEventListener('drop', async e => {
+      e.preventDefault();
+      body.classList.remove('drag-over');
+      if (!draggedCardId) return;
+      const newStatus = body.dataset.col;
+      const card = cards.find(c => c.id === draggedCardId);
+      if (card && card.status !== newStatus) {
+        const oldStatus = card.status;
+        card.status = newStatus;
+        renderAll(); // Optimistic UI update
+        try {
+          await updateCard(card);
+        } catch (err) {
+          // Revert on failure — reload from DB
+          card.status = oldStatus;
+          try { await loadState(); } catch(_) {}
+          renderAll();
+        }
+      }
+      draggedCardId = null;
+    });
+  });
+}
+
+function onDragStart(e) {
+  draggedCardId = e.currentTarget.dataset.id;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function onDragEnd(e) {
+  e.currentTarget.classList.remove('dragging');
+}
+
+// ============== FILTERS ==============
+function setupFilters() {
+  document.querySelectorAll('.filter').forEach(cb => {
+    cb.addEventListener('change', () => renderAll());
+  });
+}
+
+function toggleFilterGroup(headerEl) {
+  const body = headerEl.parentElement.querySelector('.filter-body');
+  const arrow = headerEl.querySelector('.toggle-arrow');
+  body.classList.toggle('collapsed');
+  arrow.classList.toggle('open');
+}
+
+function selectAllFilter(group) {
+  document.querySelectorAll(`.filter[data-filter="${group}"]`).forEach(cb => cb.checked = true);
+  renderAll();
+}
+
+function deselectAllFilter(group) {
+  document.querySelectorAll(`.filter[data-filter="${group}"]`).forEach(cb => cb.checked = false);
+  renderAll();
+}
+
+// ============== COLUMN COLLAPSE ==============
+function toggleColumn(btn) {
+  const col = btn.closest('.column');
+  col.classList.toggle('collapsed');
+  if (col.classList.contains('collapsed')) {
+    col.onclick = function(e) {
+      if (e.target === col || e.target.closest('.column-header')) {
+        col.classList.remove('collapsed');
+        col.onclick = null;
+      }
+    };
+  }
+}
+
+// ============== VIEWS ==============
+function setupViews() {
+  document.querySelectorAll('.views button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.views button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentView = btn.dataset.view;
+      showView(currentView);
+    });
+  });
+}
+
+function showView(view) {
+  document.getElementById('boardView').style.display = view === 'board' ? 'flex' : 'none';
+  ['byAccountView','byPersonView','byMotionView','urgentesView'].forEach(id => {
+    document.getElementById(id).classList.remove('active');
+  });
+  document.getElementById('metricsView').classList.remove('active');
+
+  if (view === 'by-account') { document.getElementById('byAccountView').classList.add('active'); }
+  else if (view === 'by-person') { document.getElementById('byPersonView').classList.add('active'); }
+  else if (view === 'by-motion') { document.getElementById('byMotionView').classList.add('active'); }
+  else if (view === 'urgentes') { document.getElementById('urgentesView').classList.add('active'); }
+  else if (view === 'metrics') { document.getElementById('metricsView').classList.add('active'); }
+}
+
+function renderGroupedViews() {
+  const visible = cards.filter(c => isCardVisible(c));
+
+  // By Account — with 3-per-AM limit indicator
+  const byAccount = {};
+  visible.forEach(c => { (byAccount[c.workspace] = byAccount[c.workspace]||[]).push(c); });
+  document.getElementById('byAccountView').innerHTML = Object.keys(byAccount).sort().map(ws => {
+    const wsCards = byAccount[ws];
+    const activeCards = wsCards.filter(c => c.status !== 'backlog' && c.status !== 'completado');
+    // Check 3-per-AM limit
+    const byAM = {};
+    activeCards.forEach(c => { (byAM[c.assignee] = byAM[c.assignee]||[]).push(c); });
+    let limitWarnings = '';
+    Object.keys(byAM).forEach(am => {
+      if (byAM[am].length > 3) {
+        limitWarnings += `<span class="limit-warning">${am.split(' ')[0]}: ${byAM[am].length}/3</span>`;
+      }
+    });
+    return `<div class="group-section"><h2>${ws} <span class="group-count">${wsCards.length} tarjetas ${limitWarnings}</span></h2><div class="group-cards">${wsCards.map(c=>renderCardHTML(c)).join('')}</div></div>`;
+  }).join('');
+
+  // By Person
+  const byPerson = {};
+  visible.forEach(c => { (byPerson[c.assignee] = byPerson[c.assignee]||[]).push(c); });
+  document.getElementById('byPersonView').innerHTML = Object.keys(byPerson).sort().map(p => {
+    const inProg = byPerson[p].filter(c=>c.status==='en_progreso').length;
+    const blocked = byPerson[p].filter(c=>c.status==='bloqueado').length;
+    // Count accounts exceeding 3 active
+    const personAccounts = {};
+    byPerson[p].filter(c=>c.status!=='backlog'&&c.status!=='completado').forEach(c=>{(personAccounts[c.workspace]=personAccounts[c.workspace]||[]).push(c);});
+    const overLimit = Object.keys(personAccounts).filter(ws=>personAccounts[ws].length>3).length;
+    const overLimitBadge = overLimit > 0 ? ` | <span style="color:var(--rojo);font-weight:700">${overLimit} cuentas exceden 3</span>` : '';
+    return `<div class="group-section"><h2>${p} <span class="group-count">${byPerson[p].length} tarjetas | ${inProg} en progreso | ${blocked} bloqueadas${overLimitBadge}</span></h2><div class="group-cards">${byPerson[p].map(c=>renderCardHTML(c)).join('')}</div></div>`;
+  }).join('');
+
+  // By Motion
+  const rolloutCards = visible.filter(c => c.motion === 'rollout');
+  const expansionCards = visible.filter(c => c.motion === 'expansion');
+  let motionHtml = '';
+  if (rolloutCards.length) {
+    motionHtml += `<div class="group-section"><h2>RollOut <span class="group-count">${rolloutCards.length} tarjetas — clientes nuevos o en ramp-up</span></h2><div class="group-cards">${rolloutCards.map(c=>renderCardHTML(c)).join('')}</div></div>`;
+  }
+  if (expansionCards.length) {
+    motionHtml += `<div class="group-section"><h2>Expansion <span class="group-count">${expansionCards.length} tarjetas — upsell / crosssell / volumen</span></h2><div class="group-cards">${expansionCards.map(c=>renderCardHTML(c)).join('')}</div></div>`;
+  }
+  document.getElementById('byMotionView').innerHTML = motionHtml || '<div class="group-section"><h2>Sin tarjetas visibles</h2></div>';
+
+  // Urgentes (reactivos)
+  const urgentes = visible.filter(c => c.origin === 'reactivo').sort((a,b) => (b.createdCycle||0) - (a.createdCycle||0));
+  document.getElementById('urgentesView').innerHTML = urgentes.length > 0
+    ? `<div class="group-section"><h2>Reactivos <span class="group-count">${urgentes.length} tarjetas</span></h2><div class="group-cards">${urgentes.map(c=>renderCardHTML(c)).join('')}</div></div>`
+    : '<div class="group-section"><h2>Sin reactivos en este ciclo</h2></div>';
+
+  // Remove drag from grouped views
+  document.querySelectorAll('.grouped-view .card[draggable]').forEach(el => {
+    el.removeAttribute('draggable');
+  });
+}
+
+// ============== METRICS ==============
+function renderMetrics() {
+  const all = cards.filter(c => isCardVisible(c));
+  const active = all.filter(c => c.status !== 'backlog');
+  const completed = all.filter(c => c.status === 'completado');
+  const inProg = all.filter(c => c.status === 'en_progreso');
+  const blocked = all.filter(c => c.status === 'bloqueado');
+  const pendiente = all.filter(c => c.status === 'pendiente');
+  const planCompleted = completed.filter(c => c.origin === 'planificado');
+  const reactCompleted = completed.filter(c => c.origin === 'reactivo');
+  const pctComplete = active.length > 0 ? Math.round(completed.length / active.length * 100) : 0;
+  const planRatio = completed.length > 0 ? Math.round(planCompleted.length / completed.length * 100) : 0;
+
+  // Aging stats
+  const aged3 = all.filter(c => c.status !== 'completado' && getAging(c) >= 3);
+  const aged2 = all.filter(c => c.status !== 'completado' && getAging(c) === 2);
+
+  // Coverage: T1 accounts with at least 1 completed
+  const t1accounts = [...new Set(all.filter(c=>c.tier==='T1'||c.tier==='T1-P').map(c=>c.workspace))];
+  const t1completed = [...new Set(completed.filter(c=>c.tier==='T1'||c.tier==='T1-P').map(c=>c.workspace))];
+  const coverage = t1accounts.length > 0 ? Math.round(t1completed.length / t1accounts.length * 100) : 0;
+
+  // Category distribution
+  const catDist = {};
+  all.forEach(c => { catDist[c.category] = (catDist[c.category]||0)+1; });
+
+  // Motion distribution
+  const motionDist = { rollout:0, expansion:0 };
+  all.forEach(c => { if(motionDist[c.motion]!==undefined) motionDist[c.motion]++; });
+
+  // 3-per-account limit violations
+  const accountAM = {};
+  all.filter(c=>c.status!=='backlog'&&c.status!=='completado').forEach(c => {
+    const key = c.workspace+'|||'+c.assignee;
+    accountAM[key] = (accountAM[key]||0)+1;
+  });
+  const violations = Object.entries(accountAM).filter(([,cnt])=>cnt>3);
+
+  // By CSM
+  const csmStats = {};
+  all.forEach(c => {
+    if (!csmStats[c.assignee]) csmStats[c.assignee] = { total:0, completed:0, blocked:0, inProg:0 };
+    csmStats[c.assignee].total++;
+    if (c.status==='completado') csmStats[c.assignee].completed++;
+    if (c.status==='bloqueado') csmStats[c.assignee].blocked++;
+    if (c.status==='en_progreso') csmStats[c.assignee].inProg++;
+  });
+
+  let html = '<h2 style="margin-bottom:16px;font-size:16px;color:var(--azul-oscuro-800)">Metricas del Ciclo ' + currentCycle.number + '</h2>';
+  html += '<div class="metrics-grid">';
+  html += metricCard('Completitud', pctComplete+'%', 'Meta: >75%');
+  html += metricCard('Completadas', completed.length, `de ${active.length} activas`);
+  html += metricCard('En Progreso', inProg.length, 'Activas ahora');
+  html += metricCard('Bloqueadas', blocked.length, blocked.length > 3 ? 'Atencion!' : 'OK');
+  html += metricCard('Pendientes', pendiente.length, 'Sin iniciar');
+  html += metricCard('Plan vs React', planRatio+'% plan', `${planCompleted.length} plan / ${reactCompleted.length} react`);
+  html += metricCard('Cobertura T1', coverage+'%', `${t1completed.length}/${t1accounts.length} cuentas`);
+  html += metricCard('Antiguedad 3+', aged3.length, aged3.length > 0 ? 'Requieren atencion urgente' : 'Limpio');
+  html += metricCard('RollOut / Expansion', `${motionDist.rollout} / ${motionDist.expansion}`, 'Distribucion motion');
+  html += metricCard('Limite 3/cuenta', violations.length, violations.length > 0 ? 'Cuentas excedidas' : 'Todo OK');
+  html += '</div>';
+
+  // Category breakdown
+  html += '<h3 style="margin:16px 0 8px;font-size:14px;color:var(--azul-oscuro-800)">Distribucion por Categoria</h3>';
+  html += '<div class="metrics-grid">';
+  Object.keys(CATEGORY_LABELS).forEach(cat => {
+    html += metricCard(CATEGORY_LABELS[cat], catDist[cat]||0, 'tarjetas');
+  });
+  html += '</div>';
+
+  // CSM breakdown
+  html += '<h3 style="margin:16px 0 8px;font-size:14px;color:var(--azul-oscuro-800)">Carga por Responsable</h3>';
+  html += '<div class="metrics-grid">';
+  Object.keys(csmStats).sort().forEach(csm => {
+    const s = csmStats[csm];
+    html += metricCard(csm, s.total+' tarjetas', `${s.completed} OK | ${s.inProg} prog | ${s.blocked} bloq`);
+  });
+  html += '</div>';
+
+  // Limit violations
+  if (violations.length > 0) {
+    html += '<h3 style="margin:16px 0 8px;font-size:14px;color:var(--rojo)">Cuentas que exceden limite de 3 compromisos por AM</h3>';
+    html += '<div style="background:#fff;border-radius:8px;padding:12px;margin-bottom:16px;">';
+    violations.forEach(([key, cnt]) => {
+      const [ws, am] = key.split('|||');
+      html += `<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--neutral-200)"><strong>${ws}</strong> — ${am}: <span style="color:var(--rojo);font-weight:700">${cnt} compromisos activos</span></div>`;
+    });
+    html += '</div>';
+  }
+
+  // Aged cards list
+  if (aged3.length > 0) {
+    html += '<h3 style="margin:16px 0 8px;font-size:14px;color:var(--rojo)">Tarjetas con 3+ ciclos de antiguedad</h3>';
+    html += '<div class="group-cards">' + aged3.map(c=>renderCardHTML(c)).join('') + '</div>';
+  }
+
+  document.getElementById('metricsView').innerHTML = html;
+}
+
+function metricCard(label, value, sub) {
+  return `<div class="metric-card"><div class="metric-label">${label}</div><div class="metric-value">${value}</div><div class="metric-sub">${sub}</div></div>`;
+}
+
+function updateMiniMetrics() {
+  const all = cards.filter(c => isCardVisible(c) && c.status !== 'backlog');
+  const completed = all.filter(c => c.status === 'completado').length;
+  const inProg = all.filter(c => c.status === 'en_progreso').length;
+  const blocked = all.filter(c => c.status === 'bloqueado').length;
+  const pct = all.length > 0 ? Math.round(completed / all.length * 100) : 0;
+  const planComp = all.filter(c => c.status==='completado' && c.origin==='planificado').length;
+  const reactComp = all.filter(c => c.status==='completado' && c.origin==='reactivo').length;
+  document.getElementById('m-completed').textContent = completed;
+  document.getElementById('m-progress').textContent = inProg;
+  document.getElementById('m-blocked').textContent = blocked;
+  document.getElementById('m-pct').textContent = pct+'%';
+  document.getElementById('m-ratio').textContent = (planComp+reactComp) > 0 ? `${planComp}P/${reactComp}R` : '-';
+}
+
+function updateCycleBadge() {
+  document.getElementById('cycleBadge').textContent = `Ciclo ${currentCycle.number} (Sem ${currentCycle.weeks})`;
+}
+
+// ============== CARD MODAL ==============
+function openNewCardModal() {
+  document.getElementById('modalTitle').textContent = 'Nuevo Compromiso';
+  document.getElementById('cardId').value = '';
+  document.getElementById('cardTitle').value = '';
+  document.getElementById('cardWorkspace').value = '';
+  document.getElementById('cardAssignee').value = 'Juan Xavier';
+  document.getElementById('cardCategory').value = 'soporte_operativo';
+  document.getElementById('cardMotion').value = 'expansion';
+  document.getElementById('cardModule').value = '';
+  document.getElementById('cardDue').value = '';
+  document.getElementById('cardCountry').value = 'EC';
+  document.getElementById('cardTier').value = 'T1';
+  document.getElementById('cardClientStatus').value = 'activo';
+  document.getElementById('cardOrigin').value = 'planificado';
+  document.getElementById('cardBlockedBy').value = '';
+  document.getElementById('cardNotes').value = '';
+  document.getElementById('cardCreatedCycle').value = currentCycle.number;
+  document.getElementById('btnDelete').style.display = 'none';
+  document.getElementById('cardModal').classList.add('active');
+}
+
+function openEditCard(id) {
+  const card = cards.find(c => c.id === id);
+  if (!card) return;
+  document.getElementById('modalTitle').textContent = 'Editar Compromiso';
+  document.getElementById('cardId').value = card.id;
+  document.getElementById('cardTitle').value = card.title;
+  document.getElementById('cardWorkspace').value = card.workspace;
+  document.getElementById('cardAssignee').value = card.assignee;
+  document.getElementById('cardCategory').value = card.category;
+  document.getElementById('cardMotion').value = card.motion || 'expansion';
+  document.getElementById('cardModule').value = card.module || '';
+  document.getElementById('cardDue').value = card.dueDate || '';
+  document.getElementById('cardCountry').value = card.country;
+  document.getElementById('cardTier').value = card.tier;
+  document.getElementById('cardClientStatus').value = card.clientStatus;
+  document.getElementById('cardOrigin').value = card.origin;
+  document.getElementById('cardBlockedBy').value = card.blockedBy || '';
+  document.getElementById('cardNotes').value = card.notes || '';
+  document.getElementById('cardCreatedCycle').value = card.createdCycle || currentCycle.number;
+  document.getElementById('btnDelete').style.display = 'block';
+  document.getElementById('cardModal').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('cardModal').classList.remove('active');
+}
+
+async function saveCard() {
+  const id = document.getElementById('cardId').value;
+  const data = {
+    title: document.getElementById('cardTitle').value.trim(),
+    workspace: document.getElementById('cardWorkspace').value.trim(),
+    assignee: document.getElementById('cardAssignee').value,
+    category: document.getElementById('cardCategory').value,
+    motion: document.getElementById('cardMotion').value,
+    module: document.getElementById('cardModule').value.trim(),
+    dueDate: document.getElementById('cardDue').value,
+    country: document.getElementById('cardCountry').value,
+    tier: document.getElementById('cardTier').value,
+    clientStatus: document.getElementById('cardClientStatus').value,
+    origin: document.getElementById('cardOrigin').value,
+    blockedBy: document.getElementById('cardBlockedBy').value.trim(),
+    notes: document.getElementById('cardNotes').value.trim(),
+    createdCycle: parseInt(document.getElementById('cardCreatedCycle').value) || currentCycle.number,
+  };
+  if (!data.title) { alert('Titulo es obligatorio'); return; }
+  if (!data.workspace) { alert('Cuenta/Workspace es obligatorio'); return; }
+
+  try {
+    if (id) {
+      // Update existing card
+      const card = cards.find(c => c.id === id);
+      if (card) {
+        const updated = { ...card, ...data };
+        await updateCard(updated);
+      }
+    } else {
+      // Create new card
+      await createCard({ status: 'pendiente', ...data });
+    }
+    closeModal();
+    renderAll();
+  } catch (err) {
+    // Error already shown by updateCard/createCard
+  }
+}
+
+async function deleteCard() {
+  const id = document.getElementById('cardId').value;
+  if (!id) return;
+  if (!confirm('Eliminar este compromiso?')) return;
+  try {
+    await removeCard(id);
+    closeModal();
+    renderAll();
+  } catch (err) {
+    // Error already shown by removeCard
+  }
+}
+
+// ============== CYCLE MANAGEMENT ==============
+function openCycleModal() {
+  document.getElementById('cycleNumber').value = currentCycle.number;
+  document.getElementById('cycleWeeks').value = currentCycle.weeks;
+
+  const active = cards.filter(c => c.status !== 'backlog');
+  const completed = active.filter(c => c.status === 'completado');
+  const notCompleted = active.filter(c => c.status !== 'completado');
+  const statsHtml = `
+    <div class="stat-box"><div class="stat-val">${completed.length}</div><div class="stat-label">Completadas</div></div>
+    <div class="stat-box"><div class="stat-val">${notCompleted.length}</div><div class="stat-label">No completadas</div></div>
+    <div class="stat-box"><div class="stat-val">${active.length > 0 ? Math.round(completed.length/active.length*100) : 0}%</div><div class="stat-label">Completitud</div></div>
+    <div class="stat-box"><div class="stat-val">${cards.filter(c=>c.status==='bloqueado').length}</div><div class="stat-label">Bloqueadas</div></div>
+  `;
+  document.getElementById('cycleStats').innerHTML = statsHtml;
+  document.getElementById('cycleModal').classList.add('active');
+}
+
+async function closeCycleModal() {
+  const newNumber = parseInt(document.getElementById('cycleNumber').value) || currentCycle.number;
+  const newWeeks = document.getElementById('cycleWeeks').value || currentCycle.weeks;
+
+  if (newNumber !== currentCycle.number || newWeeks !== currentCycle.weeks) {
+    currentCycle.number = newNumber;
+    currentCycle.weeks = newWeeks;
+    try {
+      await updateCycle(currentCycle);
+    } catch (err) {
+      // Error already shown
+    }
+  }
+  updateCycleBadge();
+  document.getElementById('cycleModal').classList.remove('active');
+}
+
+async function closeCycle() {
+  if (!confirm('Cerrar ciclo actual?\n\n- Tarjetas completadas se eliminaran\n- Tarjetas en progreso/bloqueadas pasan a pendiente\n- Se abrira un nuevo ciclo')) return;
+
+  try {
+    // Delete completed cards from Supabase
+    const completedIds = cards.filter(c => c.status === 'completado').map(c => c.id);
+    if (completedIds.length > 0) {
+      const { error: delErr } = await supabase
+        .from('kanban_cards')
+        .delete()
+        .in('id', completedIds);
+      if (delErr) throw delErr;
+    }
+
+    // Move in_progress and bloqueado to pendiente
+    const toResetIds = cards.filter(c => c.status === 'en_progreso' || c.status === 'bloqueado').map(c => c.id);
+    if (toResetIds.length > 0) {
+      const { error: upErr } = await supabase
+        .from('kanban_cards')
+        .update({ status: 'pendiente' })
+        .in('id', toResetIds);
+      if (upErr) throw upErr;
+    }
+
+    // Update cycle
+    currentCycle.number++;
+    const newWeekStart = parseInt(currentCycle.weeks.split('-')[1]) + 1;
+    currentCycle.weeks = `${newWeekStart}-${newWeekStart+1}`;
+    await updateCycle(currentCycle);
+
+    // Reload from DB
+    await loadState();
+    document.getElementById('cycleModal').classList.remove('active');
+    renderAll();
+  } catch (err) {
+    console.error('closeCycle error:', err);
+    showError('Error al cerrar ciclo: ' + (err.message || err));
+  }
+}
+
+// ============== KEYBOARD ==============
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeModal();
+    document.getElementById('cycleModal').classList.remove('active');
+  }
+});
+
+// ============== BOOT ==============
+init();
+</script>
+
+<!--
+============================================================================
+SEED DATA FOR MIGRATION
+============================================================================
+Use this data to populate the kanban_cards table in Supabase.
+Field mapping: clientStatus -> client_status, dueDate -> due_date,
+blockedBy -> blocked_by, createdCycle -> created_cycle
+
+SQL to create tables:
+
+CREATE TABLE kanban_cycles (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  number integer NOT NULL,
+  weeks text NOT NULL,
+  is_current boolean DEFAULT true,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE kanban_cards (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  title text NOT NULL,
+  workspace text NOT NULL,
+  assignee text NOT NULL,
+  category text NOT NULL,
+  motion text NOT NULL,
+  status text NOT NULL DEFAULT 'pendiente',
+  country text NOT NULL,
+  tier text NOT NULL,
+  client_status text NOT NULL DEFAULT 'activo',
+  origin text NOT NULL DEFAULT 'planificado',
+  due_date date,
+  blocked_by text,
+  notes text,
+  module text,
+  created_cycle integer NOT NULL,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+ALTER PUBLICATION supabase_realtime ADD TABLE kanban_cards;
+ALTER PUBLICATION supabase_realtime ADD TABLE kanban_cycles;
+
+INSERT INTO kanban_cycles (number, weeks, is_current) VALUES (5, '8-9', true);
+
+INSERT INTO kanban_cards (title, workspace, assignee, category, motion, status, country, tier, client_status, origin, due_date, blocked_by, notes, module, created_cycle) VALUES
+('Sacar reu operativa - Aloha / Decision maker stakeholders','Grupo Alimentarium (Super Salads)','Carlos Merino','growth','rollout','pendiente','MX','T1-P','piloto','planificado',NULL,NULL,NULL,NULL,5),
+('Enviar reporte a Super Salads (miercoles 16-feb) - next steps','Grupo Alimentarium (Super Salads)','Carlos Merino','soporte_operativo','rollout','pendiente','MX','T1-P','piloto','planificado',NULL,NULL,NULL,NULL,5),
+('Seguimiento desbloqueo (deadline miercoles)','YZA','Juan Xavier','desbloqueo','rollout','pendiente','MX','T1-P','piloto','planificado',NULL,NULL,NULL,NULL,5),
+('Primer envio en vivo','YZA','Juan Xavier','desbloqueo','rollout','pendiente','MX','T1-P','piloto','planificado',NULL,NULL,NULL,NULL,5),
+('Creacion de emails - usuarios Call Center / Escalar solucion email-security a Geek','YZA','Juan Xavier','soporte_producto','rollout','pendiente','MX','T1-P','piloto','planificado',NULL,NULL,NULL,NULL,5),
+('Hacer Checklist HandsOff','Grupo CBC','Carlos Merino','desbloqueo','rollout','pendiente','CO','T1-P','piloto','planificado',NULL,NULL,NULL,NULL,5),
+('Reunion de Hands Off','Grupo CBC','Carlos Merino','desbloqueo','rollout','pendiente','CO','T1-P','piloto','planificado',NULL,NULL,NULL,NULL,5),
+('Arranque Piloto - primer pedido','Grupo CBC','Carlos Merino','desbloqueo','rollout','pendiente','CO','T1-P','piloto','planificado',NULL,NULL,NULL,NULL,5),
+('Reunion de corte con Fabio + Juan Francisco: revisar incidencias - costos - soluciones','Grupo CEBA','Juan Xavier','growth','rollout','pendiente','CO','T1-P','piloto','planificado',NULL,NULL,'Formato: que paso > cuanto cuesta > como se soluciona > por que Picker funciona mejor',NULL,5),
+('Activar flota propia','Grupo CEBA','Juan Xavier','desbloqueo','rollout','pendiente','CO','T1-P','piloto','planificado',NULL,NULL,NULL,'MyFleet',5),
+('Capacitacion por zonas a operadores','Grupo CEBA','Juan Xavier','soporte_operativo','rollout','pendiente','CO','T1-P','piloto','planificado',NULL,NULL,'Esperar reporte de JD sobre uso de herramienta. Agrupar por zona, no por local.',NULL,5),
+('Etiquetacion para resolver confusion en batching','Grupo CEBA','Juan Xavier','soporte_producto','rollout','backlog','CO','T1-P','piloto','planificado',NULL,NULL,NULL,NULL,5),
+('Pibox codigo de entrega (solucion en camino)','Grupo CEBA','Juan Xavier','soporte_producto','rollout','backlog','CO','T1-P','piloto','planificado',NULL,NULL,NULL,NULL,5),
+('Enviar mail de evidencia/status con CC Ricardo - solicitar fecha de arranque','Pizza Hut COL','Juan Xavier','desbloqueo','rollout','pendiente','CO','T1-P','piloto','planificado',NULL,NULL,NULL,NULL,5),
+('Tener primer envio en conjunto + arranque de piloto','Pizza Hut COL','Juan Xavier','desbloqueo','rollout','pendiente','CO','T1-P','piloto','planificado',NULL,NULL,NULL,NULL,5),
+('Dar seguimiento avances de Integracion proveedor interno Shopify','Marisa','Carlos Merino','soporte_producto','rollout','pendiente','MX','T1-P','piloto','planificado',NULL,NULL,NULL,NULL,5),
+('Sesion 11:00 para cerrar / Ver resultados','Marisa','Carlos Merino','soporte_operativo','rollout','pendiente','MX','T1-P','piloto','planificado',NULL,NULL,NULL,NULL,5),
+('Rollout nuevas tiendas / Enviar mail de confirmacion','Marisa','Carlos Merino','desbloqueo','rollout','pendiente','MX','T1-P','piloto','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar MBR quincenal','Spoon','Carlos Merino','soporte_operativo','rollout','pendiente','EC','T1-P','piloto','planificado',NULL,NULL,NULL,NULL,5),
+('Envio de Reporte','Spoon','Carlos Merino','soporte_operativo','rollout','pendiente','EC','T1-P','piloto','planificado',NULL,NULL,NULL,NULL,5),
+('Sacar sesion con Faster','Kobe Sushi','Juan Xavier','soporte_operativo','expansion','pendiente','EC','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Reporteria My Fleet','Kobe Sushi','Juan Xavier','soporte_operativo','expansion','backlog','EC','T1','activo','planificado',NULL,NULL,NULL,'MyFleet',5),
+('Revisar con Geek (Kilometraje con batching)','Kobe Sushi','Juan Xavier','soporte_producto','expansion','backlog','EC','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Presentar opciones de reduccion de costo en Mexico','Justo Mexico','Juan Xavier','growth','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Evaluar cuantos pedidos adicionales pueden dar Justo','Justo Mexico','Juan Xavier','growth','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Analizar ahorro vs volumen / Preparar analisis de sensibilidad','Justo Mexico','Juan Xavier','growth','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar reunion operativa con otros Stakeholders y operativos de locales criticos','Grupo MB','Juan Xavier','soporte_operativo','expansion','pendiente','EC','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Empezar a trabajar en reporteria para My Fleet','MANSUERA SA','Juan Xavier','soporte_operativo','expansion','pendiente','EC','T1','activo','planificado',NULL,NULL,NULL,'MyFleet',5),
+('Presionar Link de pago. Israel/Julio','Pollo Pepe','Carlos Merino','growth','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Definir avances con Ricardo PWA. Reunion miercoles en vivo conductores','Pollo Pepe','Carlos Merino','soporte_producto','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Monitoreo nueva app con repartidores post implementacion','Pollo Pepe','Carlos Merino','soporte_operativo','expansion','pendiente','MX','T1','activo','reactivo',NULL,NULL,NULL,NULL,5),
+('Sacar MBR','TotalplayDelivery (Totalplay)','Carlos Merino','soporte_operativo','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Confirmar cambio de pricing de Rappi / Jorge (Antonio)','TotalplayDelivery (Totalplay)','Carlos Merino','growth','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Seguimiento con Citlalli data operativa ult 6 meses / Rollout tiendas','Ok Pastelerias','Carlos Merino','desbloqueo','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('MBR','Ok Pastelerias','Carlos Merino','soporte_operativo','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Reporte de uso de Auto para cuentas en MX','Ok Pastelerias','Carlos Merino','soporte_operativo','expansion','backlog','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Apoyar apertura nueva sucursal (capacitacion/usuarios)','Sushi Central','Juan Xavier','desbloqueo','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Seguimiento - Pedidos Uber (cantidad)','Sushi Central','Juan Xavier','growth','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Resolver con Alex problema link to pay en blanco en sucursal Villas','Sushi Central','Juan Xavier','soporte_producto','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Hablar con Arturo / Tema lideres de zona','Minoni Pizzeria Artesanal','Juan Xavier','growth','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Confirmar Integracion y Founders Circle','Minoni Pizzeria Artesanal','Juan Xavier','soporte_producto','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar sesion con Gustavo (API) / Ejecutar acciones de avances','Splift','Juan Xavier','soporte_producto','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Contactar con Wow Factor (David checkout para Shopify)','Splift','Juan Xavier','soporte_producto','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Activacion Founders Circle con Olaclick','TQ TAQUEARTE CORPORATION','Juan Xavier','desbloqueo','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Enviar reporte desempeno','TQ TAQUEARTE CORPORATION','Juan Xavier','soporte_operativo','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Activacion Founders Circle con Olaclick','Operadora de Alimentos','Juan Xavier','desbloqueo','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Enviar reporte desempeno','Operadora de Alimentos','Juan Xavier','soporte_operativo','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Monitorear tiempos / Reduccion Waiting Time','Barbacoa El Mexiquense','Juan Xavier','desbloqueo','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar MBR','Barbacoa El Mexiquense','Juan Xavier','soporte_operativo','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Activar rollout de MyFleet / Enviar loom driver guide my fleet','Prixz','Carlos Merino','desbloqueo','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,'MyFleet',5),
+('MBR','Prixz','Carlos Merino','soporte_operativo','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Sacar listado conductores / Reunion en vivo','Prixz','Carlos Merino','soporte_operativo','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('MBR','Blend (Grupo La Birreria)','Carlos Merino','soporte_operativo','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Monitoreo de Tiendas con tiempos superiores a 45min / relacion distancias','Blend (Grupo La Birreria)','Carlos Merino','soporte_operativo','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Confirmar reu con Rafael viernes 13','Blend (Grupo La Birreria)','Carlos Merino','growth','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar MBR quincenal','Club de Pollos','Carlos Merino','soporte_operativo','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Definir plan 2026','Club de Pollos','Carlos Merino','growth','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Enviar resumen para revision costos','Club de Pollos','Carlos Merino','growth','expansion','pendiente','MX','T1','activo','reactivo',NULL,NULL,NULL,NULL,5),
+('Sacar reunion / Plan 2026','Krispy Kreme EC (Maboom Food SAS)','Juan Xavier','growth','expansion','pendiente','EC','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar reunion con decision-maker - preocupacion por bajo volumen','Krispy Kreme EC (Maboom Food SAS)','Juan Xavier','desbloqueo','expansion','pendiente','EC','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar MBR quincenal','Tortas la Castellana','Carlos Merino','soporte_operativo','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Definir plan 2026','Tortas la Castellana','Carlos Merino','growth','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar MBR quincenal','ROCK N'' WOK','Carlos Merino','soporte_operativo','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Revisar pre checkout / Codigo de entrega Pibox (finales febrero)','Sanse&Co','Juan Xavier','soporte_producto','expansion','pendiente','CO','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar sesion costos Shopify','Sanse&Co','Juan Xavier','growth','expansion','pendiente','CO','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Seguimiento para llegar a 7-8% de unfulfilled','Justo Chile','Juan Xavier','desbloqueo','expansion','pendiente','CL','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Confirmar con Gustavo activacion de Rappi por tienda + re-enable por local','Justo Chile','Juan Xavier','soporte_producto','expansion','pendiente','CL','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Escalar correccion de distancias Uber','Justo Chile','Juan Xavier','soporte_producto','expansion','pendiente','CL','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Sacar sesion con Jessica - nueva champion','AutoDis','Carlos Merino','growth','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Definir plan de accion 2026','AutoDis','Carlos Merino','growth','expansion','pendiente','MX','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Alinear terminos y condiciones con Irene','Republica del Cacao','Juan Xavier','growth','expansion','pendiente','EC','T1','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Completar integracion Dragontail para Justo Peru','Justo Peru','Juan Xavier','soporte_producto','expansion','bloqueado','PE','T1','activo','planificado','2026-01-30','Bug en API Dragontail, ticket abierto con Alex','Lleva 3 ciclos sin resolver. Escalar con tech.',NULL,2),
+('Analizar facturas de diciembre con Antonio y enviar reporte a Justo','Justo Ecuador','Juan Xavier','soporte_operativo','expansion','pendiente','EC','T2','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Sacar MBR','Dancali','Juan Xavier','soporte_operativo','expansion','pendiente','CO','T2','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Contactar a Juanita para agendar reunion','Dancali','Juan Xavier','growth','expansion','pendiente','CO','T2','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar MBR','Casa Kroketas','Carlos Merino','soporte_operativo','expansion','pendiente','MX','T2','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Definir plan de accion 2026','Casa Kroketas','Carlos Merino','growth','expansion','pendiente','MX','T2','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar MBR con Axel (al regreso de vacaciones)','Patagonia (Adomicilio)','Carlos Merino','soporte_operativo','expansion','pendiente','MX','T2','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Analizar facturas de diciembre con Antonio y enviar reporte a Justo','Justo Costa Rica','Juan Xavier','soporte_operativo','expansion','pendiente','CR','T2','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar MBR','FRESCAMESA / LUPES BBQ','Carlos Merino','soporte_operativo','expansion','pendiente','MX','T2','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Llamada de Antonio - seguimiento','Piante SAS','Juan Xavier','growth','expansion','pendiente','CO','T2','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Sacar info de plan de crecimiento / Giovan','Mile Pizzas (Foodbot)','Carlos Merino','growth','expansion','pendiente','MX','T2','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar MBR','Rudy Burgers','Carlos Merino','soporte_operativo','expansion','pendiente','MX','T2','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Solicitar credenciales Rappi y PeYa','Rudy Burgers','Carlos Merino','soporte_producto','expansion','pendiente','MX','T2','activo','reactivo',NULL,NULL,NULL,NULL,5),
+('Agendar MBR','Tortas la Castellana Matriz','Carlos Merino','soporte_operativo','expansion','pendiente','MX','T2','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar MBR','Hayati Toast','Juan Xavier','soporte_operativo','expansion','pendiente','MX','T2','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Valores en 0 Olaclick','Hayati Toast','Juan Xavier','soporte_producto','expansion','pendiente','MX','T2','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar MBR','Tantan Pizza','Carlos Merino','soporte_operativo','expansion','pendiente','MX','T2','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar MBR','Tortas la Castellana (Operadora de Productos)','Carlos Merino','soporte_operativo','expansion','pendiente','MX','T2','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar MBR','Burgo Fast Food','Carlos Merino','soporte_operativo','expansion','pendiente','MX','T2','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar MBR','Tacos de Barbacoa MC','Carlos Merino','soporte_operativo','expansion','pendiente','MX','T2','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar MBR','Pizzas Punto Bros','Juan Xavier','soporte_operativo','expansion','pendiente','MX','T3','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Activacion Founders Circle con Olaclick','JENSA SERVICIOS DE ALIMENTOS','Juan Xavier','desbloqueo','expansion','pendiente','MX','T3','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Creacion de nuevo local (pendiente)','Fratelli Baoshi','Carlos Merino','desbloqueo','expansion','pendiente','MX','T3','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar MBR','TORTAS LA CASTELLANA REVOLUCION','Carlos Merino','soporte_operativo','expansion','pendiente','MX','T3','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar MBR','BIONOURISSO GDL','Carlos Merino','soporte_operativo','expansion','pendiente','MX','T3','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar MBR','Pepitos Grill Shyris','Juan Xavier','soporte_operativo','expansion','pendiente','EC','T3','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Activacion Founders Circle con Olaclick','EL MUSEO DEL PASTOR SA DE CV','Juan Xavier','desbloqueo','expansion','pendiente','MX','T3','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar MBR','Oh my Chicken','Juan Xavier','soporte_operativo','expansion','pendiente','MX','T3','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar MBR','COSTUMATIC','Juan Xavier','soporte_operativo','expansion','pendiente','MX','T3','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Agendar MBR','Tacos de Barbacoa MC - Tesistan','Carlos Merino','soporte_operativo','expansion','pendiente','MX','T3','activo','planificado',NULL,NULL,NULL,NULL,5),
+('Monitorear envios my fleet / nueva app','Delit','Carlos Merino','soporte_producto','expansion','pendiente','EC','T3','activo','planificado',NULL,NULL,NULL,'MyFleet',5),
+('Ejecutar protocolo anti-churn Pollo Roosty (Churn Risk 37%)','Pollo Roosty','Carlos Merino','desbloqueo','expansion','en_progreso','EC','T1','en_riesgo','reactivo','2026-02-28',NULL,'MRR $240K. Protocolo P-003.',NULL,5),
+('Reactivar Arroz Paisa Bogota (Inactividad 12 dias)','Arroz Paisa Bogota','Carlos Merino','desbloqueo','expansion','pendiente','CO','T1','en_riesgo','reactivo','2026-03-01',NULL,'MRR $200K, Churn Risk 49%. Protocolo P-005.',NULL,5),
+('Resolver unfulfillment SAYONARA SAS (Unfulfillment 18%)','SAYONARA SAS','Stephanie Acosta','desbloqueo','expansion','en_progreso','CO','T1','en_riesgo','reactivo','2026-02-26',NULL,'MRR $200K, Churn Risk 44%. Protocolo P-001.',NULL,4);
+
+============================================================================
+-->
+</body>
+</html>

@@ -523,7 +523,7 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
 const SUPABASE_URL = 'https://jgeiubwqxvgxpedgsvcc.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnZWl1YndxeHZneHBlZGdzdmNjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0MDE5MTUsImV4cCI6MjA4Nzk3NzkxNX0.F7EKyMnXlbIdpQajqIMURhjzBUiV7_bLA4TJpd-rL_Q';
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ============== STATE ==============
 let cards = [];
@@ -601,7 +601,7 @@ function hideLoading() {
 async function loadState() {
   try {
     // Fetch cards
-    const { data: cardRows, error: cardsErr } = await supabase
+    const { data: cardRows, error: cardsErr } = await sb
       .from('kanban_cards')
       .select('*')
       .order('created_at', { ascending: true });
@@ -610,7 +610,7 @@ async function loadState() {
     cards = (cardRows || []).map(dbToJs);
 
     // Fetch current cycle
-    const { data: cycleRows, error: cycleErr } = await supabase
+    const { data: cycleRows, error: cycleErr } = await sb
       .from('kanban_cycles')
       .select('*')
       .eq('is_current', true)
@@ -638,7 +638,7 @@ async function createCard(card) {
   try {
     const row = jsToDb(card);
     delete row.id; // Let Supabase generate UUID
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('kanban_cards')
       .insert(row)
       .select()
@@ -660,7 +660,7 @@ async function updateCard(card) {
     const row = jsToDb(card);
     const id = row.id;
     delete row.id;
-    const { error } = await supabase
+    const { error } = await sb
       .from('kanban_cards')
       .update(row)
       .eq('id', id);
@@ -679,7 +679,7 @@ async function updateCard(card) {
 
 async function removeCard(id) {
   try {
-    const { error } = await supabase
+    const { error } = await sb
       .from('kanban_cards')
       .delete()
       .eq('id', id);
@@ -695,7 +695,7 @@ async function removeCard(id) {
 
 async function updateCycle(cycle) {
   try {
-    const { error } = await supabase
+    const { error } = await sb
       .from('kanban_cycles')
       .update({ cycle_number: cycle.number, weeks: cycle.weeks })
       .eq('id', cycle.id);
@@ -731,7 +731,7 @@ async function init() {
     setupViews();
 
     // Realtime subscription
-    supabase.channel('kanban-realtime')
+    sb.channel('kanban-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'kanban_cards' }, () => {
         loadState().then(() => renderAll()).catch(() => {});
       })
@@ -1283,7 +1283,7 @@ async function closeCycle() {
     // Delete completed cards from Supabase
     const completedIds = cards.filter(c => c.status === 'completado').map(c => c.id);
     if (completedIds.length > 0) {
-      const { error: delErr } = await supabase
+      const { error: delErr } = await sb
         .from('kanban_cards')
         .delete()
         .in('id', completedIds);
@@ -1293,7 +1293,7 @@ async function closeCycle() {
     // Move in_progress and bloqueado to pendiente
     const toResetIds = cards.filter(c => c.status === 'en_progreso' || c.status === 'bloqueado').map(c => c.id);
     if (toResetIds.length > 0) {
-      const { error: upErr } = await supabase
+      const { error: upErr } = await sb
         .from('kanban_cards')
         .update({ status: 'pendiente' })
         .in('id', toResetIds);
@@ -1325,7 +1325,14 @@ document.addEventListener('keydown', e => {
 });
 
 // ============== BOOT ==============
-init();
+init().catch(err => {
+  console.error('INIT FATAL:', err);
+  const overlay = document.getElementById('loadingOverlay');
+  if (overlay) {
+    overlay.querySelector('.loading-text').textContent = 'Error de conexion';
+    overlay.querySelector('.loading-sub').textContent = err.message || String(err);
+  }
+});
 </script>
 
 <!--

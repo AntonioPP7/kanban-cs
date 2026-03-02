@@ -193,6 +193,18 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
 ::-webkit-scrollbar { width:6px; height:6px; }
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:var(--neutral-300); border-radius:3px; }
+/* Draft / IA cards */
+.card.draft { background:#fffbf0; border-left-color:var(--amarillo) !important; box-shadow:0 0 0 1px rgba(255,198,52,.35); }
+.card-ai-badge { position:absolute; top:6px; right:10px; font-size:9px; font-weight:800; padding:2px 6px; border-radius:3px; background:var(--amarillo); color:var(--azul-oscuro-900); letter-spacing:.5px; }
+.card-approve-btns { display:flex; gap:4px; margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,198,52,.3); }
+.btn-approve { flex:1; font-size:10px; font-weight:700; font-family:inherit; padding:4px 0; border:none; border-radius:4px; cursor:pointer; background:var(--verde-500); color:#fff; transition:.15s; }
+.btn-approve:hover { background:var(--verde-800); }
+.btn-reject { flex:1; font-size:10px; font-weight:700; font-family:inherit; padding:4px 0; border:none; border-radius:4px; cursor:pointer; background:var(--neutral-200); color:var(--azul-oscuro-500); transition:.15s; }
+.btn-reject:hover { background:#ffebee; color:var(--rojo); }
+/* Draft banner en header */
+.draft-banner { display:none; background:var(--amarillo); color:var(--azul-oscuro-900); font-size:11px; font-weight:700; padding:4px 12px; border-radius:20px; cursor:pointer; align-items:center; gap:5px; white-space:nowrap; }
+.draft-banner.visible { display:flex; }
+.draft-banner:hover { background:#e6b000; }
 /* Legend bar */
 .legend { display:flex; gap:12px; align-items:center; padding:6px 16px; background:#fff; border-bottom:1px solid var(--neutral-200); font-size:10px; overflow-x:auto; flex-shrink:0; }
 .legend .legend-item { display:flex; align-items:center; gap:4px; white-space:nowrap; }
@@ -227,6 +239,9 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
     <button data-view="by-motion">Por Motion</button>
     <button data-view="urgentes">Reactivos</button>
     <button data-view="metrics">Metricas</button>
+  </div>
+  <div class="draft-banner" id="draftBanner" onclick="filterDrafts()" title="Ver tarjetas pendientes de aprobacion">
+    ★ IA: <span id="draftCount">0</span> por aprobar
   </div>
   <button class="btn-cycle" onclick="openCycleModal()">Ciclo</button>
   <button class="btn-new" onclick="openNewCardModal()">+ Compromiso</button>
@@ -551,6 +566,7 @@ function dbToJs(row) {
     notes: row.notes || '',
     module: row.module || '',
     createdCycle: row.created_cycle,
+    approved: row.approved,  // null=IA draft, true=aprobada
   };
 }
 
@@ -573,6 +589,7 @@ function jsToDb(card) {
     created_cycle: card.createdCycle,
   };
   if (card.id) row.id = card.id;
+  if (card.approved !== undefined) row.approved = card.approved;
   return row;
 }
 
@@ -759,6 +776,14 @@ function renderAll() {
   renderMetrics();
   updateMiniMetrics();
   updateCycleBadge();
+  updateDraftBanner();
+}
+
+function updateDraftBanner() {
+  const drafts = cards.filter(c => c.approved === null);
+  const banner = document.getElementById('draftBanner');
+  document.getElementById('draftCount').textContent = drafts.length;
+  banner.classList.toggle('visible', drafts.length > 0);
 }
 
 function getAging(card) {
@@ -778,6 +803,8 @@ function agingLabel(n) {
 }
 
 function isCardVisible(card) {
+  // Tarjetas draft (IA, approved===null) siempre visibles para revision
+  if (card.approved === null) return true;
   const filters = getActiveFilters();
   if (!filters.assignee.includes(card.assignee)) return false;
   if (!filters.category.includes(card.category)) return false;
@@ -798,15 +825,21 @@ function getActiveFilters() {
 }
 
 function renderCardHTML(card) {
-  const aging = card.status === 'completado' ? 0 : getAging(card);
+  const isDraft = card.approved === null;
+  const aging = (card.status === 'completado' || isDraft) ? 0 : getAging(card);
   const isOverdue = card.dueDate && new Date(card.dueDate) < new Date() && card.status !== 'completado';
   const countryFlags = { EC:'\ud83c\uddea\ud83c\udde8', CO:'\ud83c\udde8\ud83c\uddf4', MX:'\ud83c\uddf2\ud83c\uddfd', PE:'\ud83c\uddf5\ud83c\uddea', CL:'\ud83c\udde8\ud83c\uddf1', CR:'\ud83c\udde8\ud83c\uddf7', PA:'\ud83c\uddf5\ud83c\udde6' };
   const avatarInitials = card.assignee ? card.assignee.split(' ').map(w=>w[0]).join('') : '?';
   const statusLabels = { piloto:'Piloto', activo:'Activo', en_riesgo:'En Riesgo' };
 
-  let html = `<div class="card" draggable="true" data-id="${card.id}" data-category="${card.category}" data-aging="${aging}" ondblclick="openEditCard('${card.id}')">`;
+  const draftClass = isDraft ? ' draft' : '';
+  let html = `<div class="card${draftClass}" draggable="${!isDraft}" data-id="${card.id}" data-category="${card.category}" data-aging="${aging}" ondblclick="${isDraft ? '' : `openEditCard('${card.id}')`}">`;
   html += `<div class="aging-bar"></div>`;
-  if (aging > 0) html += `<div class="aging-badge">${agingLabel(aging)}</div>`;
+  if (isDraft) {
+    html += `<div class="card-ai-badge">IA</div>`;
+  } else if (aging > 0) {
+    html += `<div class="aging-badge">${agingLabel(aging)}</div>`;
+  }
 
   // Workspace name (client)
   html += `<div class="card-workspace">${card.workspace}</div>`;
@@ -836,6 +869,15 @@ function renderCardHTML(card) {
     html += `<div class="card-due ${isOverdue?'overdue':''}">${card.dueDate}</div>`;
   }
   html += `</div>`;
+
+  // Draft approval buttons
+  if (isDraft) {
+    html += `<div class="card-approve-btns">
+      <button class="btn-approve" onclick="approveCard(event,'${card.id}')">✓ Aprobar</button>
+      <button class="btn-reject" onclick="rejectCard(event,'${card.id}')">✗ Rechazar</button>
+    </div>`;
+  }
+
   html += `</div>`;
   return html;
 }
@@ -1314,6 +1356,47 @@ async function closeCycle() {
     console.error('closeCycle error:', err);
     showError('Error al cerrar ciclo: ' + (err.message || err));
   }
+}
+
+// ============== DRAFT APPROVAL ==============
+async function approveCard(e, id) {
+  e.stopPropagation();
+  e.preventDefault();
+  const card = cards.find(c => c.id === id);
+  if (!card) return;
+  card.approved = true;
+  renderAll(); // optimistic
+  try {
+    const { error } = await sb.from('kanban_cards').update({ approved: true }).eq('id', id);
+    if (error) throw error;
+  } catch (err) {
+    card.approved = null;
+    try { await loadState(); } catch(_) {}
+    renderAll();
+    showError('Error al aprobar tarjeta: ' + (err.message || err));
+  }
+}
+
+async function rejectCard(e, id) {
+  e.stopPropagation();
+  e.preventDefault();
+  if (!confirm('¿Rechazar y eliminar esta tarjeta?')) return;
+  await removeCard(id);
+  renderAll();
+}
+
+function filterDrafts() {
+  // Ir a board view (donde están las drafts en sus columnas)
+  document.querySelectorAll('.views button').forEach(b => b.classList.remove('active'));
+  const boardBtn = document.querySelector('.views button[data-view="board"]');
+  if (boardBtn) boardBtn.classList.add('active');
+  currentView = 'board';
+  showView('board');
+  // Scroll al primer draft visible
+  setTimeout(() => {
+    const firstDraft = document.querySelector('.card.draft');
+    if (firstDraft) firstDraft.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 100);
 }
 
 // ============== KEYBOARD ==============

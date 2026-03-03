@@ -805,13 +805,19 @@ function agingLabel(n) {
 function isCardVisible(card) {
   // Tarjetas draft (IA, approved===null) siempre visibles para revision
   if (card.approved === null) return true;
-  const filters = getActiveFilters();
-  if (!filters.assignee.includes(card.assignee)) return false;
-  if (!filters.category.includes(card.category)) return false;
-  if (!filters.motion.includes(card.motion)) return false;
-  if (!filters.country.includes(card.country)) return false;
-  if (!filters.tier.includes(card.tier)) return false;
-  if (!filters.origin.includes(card.origin)) return false;
+  // Solo ocultar si el valor del card está en la lista conocida de filtros Y no está marcado.
+  // Valores no representados en los checkboxes (ej: generados por IA) siempre pasan.
+  const known = {}, checked = {};
+  document.querySelectorAll('.filter').forEach(cb => {
+    const k = cb.dataset.filter;
+    if (!known[k]) { known[k] = new Set(); checked[k] = new Set(); }
+    known[k].add(cb.dataset.val);
+    if (cb.checked) checked[k].add(cb.dataset.val);
+  });
+  for (const key of ['assignee','category','motion','country','tier','origin']) {
+    const val = card[key];
+    if (val && known[key]?.has(val) && !checked[key]?.has(val)) return false;
+  }
   return true;
 }
 

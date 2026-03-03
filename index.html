@@ -131,6 +131,7 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
 .tag-origen-reactivo { background:#ffebee; color:#e74c3c; font-weight:700; }
 .tag-motion-rollout { background:#e8f0fe; color:#1a56db; font-weight:600; }
 .tag-motion-expansion { background:#ecfdf3; color:#166534; font-weight:600; }
+.tag-motion-retencion { background:#fef3c7; color:#92400e; font-weight:600; }
 .tag-module { background:#f3e8ff; color:#7c3aed; font-weight:500; }
 .card .card-footer { display:flex; justify-content:space-between; align-items:center; margin-top:4px; }
 .card .card-assignee { font-size:10px; color:var(--neutral-800); display:flex; align-items:center; gap:4px; }
@@ -306,6 +307,7 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
         </div>
         <label><input type="checkbox" class="filter" data-filter="motion" data-val="expansion" checked> Expansion</label>
         <label><input type="checkbox" class="filter" data-filter="motion" data-val="rollout" checked> RollOut</label>
+        <label><input type="checkbox" class="filter" data-filter="motion" data-val="retencion" checked> Retencion</label>
       </div>
     </div>
     <div class="filter-group" data-group="country">
@@ -438,6 +440,7 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
         <select id="cardMotion">
           <option value="expansion">Expansion</option>
           <option value="rollout">RollOut</option>
+          <option value="retencion">Retencion</option>
         </select>
       </div>
     </div>
@@ -734,7 +737,7 @@ const CATEGORY_LABELS = {
   producto_discovery: 'Prod. Discovery'
 };
 
-const MOTION_LABELS = { expansion: 'Expansion', rollout: 'RollOut' };
+const MOTION_LABELS = { expansion: 'Expansion', rollout: 'RollOut', retencion: 'Retencion' };
 
 // ============== INIT ==============
 async function init() {
@@ -1044,12 +1047,16 @@ function renderGroupedViews() {
   // By Motion
   const rolloutCards = visible.filter(c => c.motion === 'rollout');
   const expansionCards = visible.filter(c => c.motion === 'expansion');
+  const retencionCards = visible.filter(c => c.motion === 'retencion');
   let motionHtml = '';
   if (rolloutCards.length) {
     motionHtml += `<div class="group-section"><h2>RollOut <span class="group-count">${rolloutCards.length} tarjetas — clientes nuevos o en ramp-up</span></h2><div class="group-cards">${rolloutCards.map(c=>renderCardHTML(c)).join('')}</div></div>`;
   }
   if (expansionCards.length) {
     motionHtml += `<div class="group-section"><h2>Expansion <span class="group-count">${expansionCards.length} tarjetas — upsell / crosssell / volumen</span></h2><div class="group-cards">${expansionCards.map(c=>renderCardHTML(c)).join('')}</div></div>`;
+  }
+  if (retencionCards.length) {
+    motionHtml += `<div class="group-section"><h2>Retencion <span class="group-count">${retencionCards.length} tarjetas — riesgo de churn o renegociacion</span></h2><div class="group-cards">${retencionCards.map(c=>renderCardHTML(c)).join('')}</div></div>`;
   }
   document.getElementById('byMotionView').innerHTML = motionHtml || '<div class="group-section"><h2>Sin tarjetas visibles</h2></div>';
 
@@ -1092,7 +1099,7 @@ function renderMetrics() {
   all.forEach(c => { catDist[c.category] = (catDist[c.category]||0)+1; });
 
   // Motion distribution
-  const motionDist = { rollout:0, expansion:0 };
+  const motionDist = { rollout:0, expansion:0, retencion:0 };
   all.forEach(c => { if(motionDist[c.motion]!==undefined) motionDist[c.motion]++; });
 
   // 3-per-account limit violations
@@ -1123,7 +1130,7 @@ function renderMetrics() {
   html += metricCard('Plan vs React', planRatio+'% plan', `${planCompleted.length} plan / ${reactCompleted.length} react`);
   html += metricCard('Cobertura T1', coverage+'%', `${t1completed.length}/${t1accounts.length} cuentas`);
   html += metricCard('Antiguedad 3+', aged3.length, aged3.length > 0 ? 'Requieren atencion urgente' : 'Limpio');
-  html += metricCard('RollOut / Expansion', `${motionDist.rollout} / ${motionDist.expansion}`, 'Distribucion motion');
+  html += metricCard('RollOut / Expansion / Ret.', `${motionDist.rollout} / ${motionDist.expansion} / ${motionDist.retencion}`, 'Distribucion motion');
   html += metricCard('Limite 3/cuenta', violations.length, violations.length > 0 ? 'Cuentas excedidas' : 'Todo OK');
   html += '</div>';
 

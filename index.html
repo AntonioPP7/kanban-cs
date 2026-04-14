@@ -1378,9 +1378,10 @@ async function approveCard(e, id) {
   const card = cards.find(c => c.id === id);
   if (!card) return;
   card.approved = true;
+  card.status = 'backlog';
   renderAll(); // optimistic
   try {
-    const { error } = await sb.from('kanban_cards').update({ approved: true }).eq('id', id);
+    const { error } = await sb.from('kanban_cards').update({ approved: true, status: 'backlog' }).eq('id', id);
     if (error) throw error;
   } catch (err) {
     card.approved = null;

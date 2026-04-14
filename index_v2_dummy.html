@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Kanban CS v2 — Dummy</title>
+<style>
+  :root {
+    --celeste: #00b8eb;
+    --azul-oscuro: #314374;
+    --azul: #008cff;
+    --bg: #f4f6fa;
+    --border: #e2e6ef;
+    --verde: #16a34a;
+    --amarillo: #f59e0b;
+    --rojo: #dc2626;
+    --gris-txt: #64748b;
+  }
+  * { box-sizing: border-box; font-family: -apple-system, 'Segoe UI', Arial, sans-serif; }
+  body { margin: 0; background: var(--bg); color: var(--azul-oscuro); }
+
+  header {
+    background: white;
+    border-bottom: 4px solid var(--celeste);
+    padding: 16px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header h1 { margin: 0; font-size: 20px; color: var(--azul-oscuro); }
+  header .meta { font-size: 12px; color: var(--gris-txt); }
+
+  .tabs {
+    background: white;
+    border-bottom: 1px solid var(--border);
+    padding: 0 28px;
+    display: flex;
+    gap: 4px;
+  }
+  .tab {
+    padding: 14px 22px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--gris-txt);
+    border-bottom: 3px solid transparent;
+    transition: all .15s;
+  }
+  .tab:hover { color: var(--azul-oscuro); }
+  .tab.active {
+    color: var(--azul-oscuro);
+    border-bottom-color: var(--celeste);
+  }
+  .tab .badge {
+    background: var(--bg);
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 6px;
+    font-size: 11px;
+    color: var(--azul-oscuro);
+  }
+
+  .view { padding: 28px; display: none; }
+  .view.active { display: block; }
+
+  .toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+  }
+  .toolbar h2 { margin: 0; font-size: 16px; }
+  .btn {
+    background: var(--azul);
+    color: white;
+    border: 0;
+    padding: 9px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn:hover { background: var(--azul-oscuro); }
+
+  table {
+    width: 100%;
+    background: white;
+    border-radius: 8px;
+    border-collapse: collapse;
+    box-shadow: 0 1px 3px rgba(49,67,116,.06);
+    overflow: hidden;
+  }
+  th {
+    background: #f8fafc;
+    text-align: left;
+    padding: 12px 14px;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--gris-txt);
+    border-bottom: 1px solid var(--border);
+    letter-spacing: .04em;
+  }
+  td {
+    padding: 14px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: 0; }
+  tr:hover td { background: #fafbfc; }
+
+  .sem {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .sem-verde { background: var(--verde); }
+  .sem-amarillo { background: var(--amarillo); }
+  .sem-rojo { background: var(--rojo); }
+
+  .pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .pill-verde { background: #dcfce7; color: #166534; }
+  .pill-amarillo { background: #fef3c7; color: #92400e; }
+  .pill-rojo { background: #fee2e2; color: #991b1b; }
+  .pill-gris { background: #e2e8f0; color: #475569; }
+
+  .warn {
+    display: inline-block;
+    background: #fee2e2;
+    color: #991b1b;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    margin-left: 6px;
+  }
+
+  .dossier {
+    color: var(--gris-txt);
+    font-size: 12px;
+    line-height: 1.4;
+    max-width: 260px;
+  }
+
+  .cliente { font-weight: 600; color: var(--azul-oscuro); }
+  .cliente small { display: block; color: var(--gris-txt); font-weight: 400; font-size: 11px; }
+
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+  .kpi {
+    background: white;
+    border-radius: 8px;
+    padding: 16px;
+    border-left: 4px solid var(--celeste);
+  }
+  .kpi .label { font-size: 11px; color: var(--gris-txt); text-transform: uppercase; letter-spacing: .04em; }
+  .kpi .value { font-size: 24px; font-weight: 700; color: var(--azul-oscuro); margin-top: 4px; }
+  .kpi .delta { font-size: 11px; margin-top: 2px; }
+  .kpi .delta.up { color: var(--verde); }
+  .kpi .delta.down { color: var(--rojo); }
+
+  .ops-box {
+    background: white;
+    border-radius: 8px;
+    padding: 18px;
+    margin-top: 22px;
+    border-left: 4px solid var(--azul-oscuro);
+  }
+  .ops-box h3 { margin: 0 0 10px; font-size: 14px; }
+  .ops-box textarea {
+    width: 100%;
+    min-height: 60px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 13px;
+    resize: vertical;
+    font-family: inherit;
+    color: var(--azul-oscuro);
+  }
+  .ops-box .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .ops-box label { font-size: 11px; color: var(--gris-txt); text-transform: uppercase; }
+
+  .placeholder-kanban {
+    background: white;
+    border-radius: 8px;
+    padding: 40px;
+    text-align: center;
+    color: var(--gris-txt);
+    font-size: 13px;
+  }
+
+  .filter-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .filter-bar select {
+    padding: 7px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 12px;
+    background: white;
+    color: var(--azul-oscuro);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Kanban CS — Picker Express</h1>
+    <div class="meta">Ciclo 11 · Sem 15-16 · Daily 13 abr 2026 · 09:00</div>
+  </div>
+  <div class="meta">Antonio Pazmiño · CSO</div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="show('ciclo')">Ciclo CS <span class="badge">47</span></div>
+  <div class="tab" onclick="show('rollouts')">Rollouts <span class="badge">6</span></div>
+  <div class="tab" onclick="show('healthcheck')">Health Check <span class="badge">Top 20</span></div>
+</div>
+
+<!-- ========== TAB 1: CICLO CS (placeholder del kanban actual) ========== -->
+<div id="view-ciclo" class="view active">
+  <div class="placeholder-kanban">
+    <strong>Vista actual del Kanban CS quincenal</strong><br>
+    (columnas Backlog / Pendiente / En progreso / Bloqueado / Completado — sin cambios)
+  </div>
+</div>
+
+<!-- ========== TAB 2: ROLLOUTS ========== -->
+<div id="view-rollouts" class="view">
+  <div class="toolbar">
+    <h2>Rollouts en curso</h2>
+    <button class="btn">+ Nuevo rollout</button>
+  </div>
+
+  <div class="filter-bar">
+    <select><option>Todos los AM</option><option>Juan Xavier</option><option>Carlos</option><option>Stephanie</option></select>
+    <select><option>Todos los estados</option><option>Verde</option><option>Amarillo</option><option>Rojo</option></select>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:18%">Cliente</th>
+        <th>AM</th>
+        <th>Fecha 1er pedido</th>
+        <th>Vol/día</th>
+        <th>Status integración</th>
+        <th>Dossier ejecutivo</th>
+        <th>Bloqueo</th>
+        <th style="width:70px">Estado</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="cliente">KFC México<small>WS-2341 · 80 locales</small></td>
+        <td>Carlos</td>
+        <td>22 abr<span class="warn">48H OK</span></td>
+        <td>1,200</td>
+        <td><span class="pill pill-amarillo">Tarifario pendiente</span></td>
+        <td class="dossier">Irene cerrando tarifario con PRB. Falta firma legal. JD pendiente de call con Claudio (martes).</td>
+        <td>Tarifario PRB</td>
+        <td><span class="sem sem-amarillo"></span>Amarillo</td>
+      </tr>
+      <tr>
+        <td class="cliente">Walmart México<small>WS-2456 · Piloto 5 tiendas</small></td>
+        <td>Carlos</td>
+        <td>17 abr<span class="warn">VIERNES</span></td>
+        <td>600</td>
+        <td><span class="pill pill-rojo">Integración bloqueada</span></td>
+        <td class="dossier">API rechaza tokens. Tech revisando. Reagendar a lunes 20 — viernes no arrancamos.</td>
+        <td>Token API</td>
+        <td><span class="sem sem-rojo"></span>Rojo</td>
+      </tr>
+      <tr>
+        <td class="cliente">CEBA Colombia<small>WS-2198 · 23 locales pet food</small></td>
+        <td>Juan Xavier</td>
+        <td>15 abr</td>
+        <td>450</td>
+        <td><span class="pill pill-verde">Listo</span></td>
+        <td class="dossier">Rollout oficial post-piloto. Camilo avisado. Stephanie supervisando primer día.</td>
+        <td>—</td>
+        <td><span class="sem sem-verde"></span>Verde</td>
+      </tr>
+      <tr>
+        <td class="cliente">Banco Guayaquil<small>WS-2503 · Courier interno</small></td>
+        <td>Juan Xavier</td>
+        <td>28 abr</td>
+        <td>200</td>
+        <td><span class="pill pill-amarillo">Flota en setup</span></td>
+        <td class="dossier">My Fleet activado. Faltan 8 drivers por onboardear. Daysy gestionando pagos.</td>
+        <td>Onboarding drivers</td>
+        <td><span class="sem sem-amarillo"></span>Amarillo</td>
+      </tr>
+      <tr>
+        <td class="cliente">Cruz Verde Colombia<small>WS-2611 · Farmacia 40 locales</small></td>
+        <td>Juan Xavier</td>
+        <td>5 may</td>
+        <td>900</td>
+        <td><span class="pill pill-gris">API en desarrollo</span></td>
+        <td class="dossier">Alex en integración custom (receta médica). Demo comprometido 29 abr.</td>
+        <td>API custom</td>
+        <td><span class="sem sem-amarillo"></span>Amarillo</td>
+      </tr>
+      <tr>
+        <td class="cliente">Pastelerías MV<small>WS-2722 · Quito · 12 locales</small></td>
+        <td>Juan Xavier</td>
+        <td>14 abr</td>
+        <td>180</td>
+        <td><span class="pill pill-verde">Listo</span></td>
+        <td class="dossier">Primer pedido hoy a las 14h. Supervisión directa JX. Sin bloqueos.</td>
+        <td>—</td>
+        <td><span class="sem sem-verde"></span>Verde</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ========== TAB 3: HEALTH CHECK ========== -->
+<div id="view-healthcheck" class="view">
+  <div class="toolbar">
+    <h2>Health Check — Top 20 clientes</h2>
+    <div class="meta">Snapshot: 13 abr 2026 · 07:45 · <a href="#">actualizar</a></div>
+  </div>
+
+  <div class="kpi-row">
+    <div class="kpi"><div class="label">Alertas abiertas</div><div class="value">37</div><div class="delta down">+4 vs ayer</div></div>
+    <div class="kpi"><div class="label">Críticas (>48h)</div><div class="value" style="color:var(--rojo)">8</div><div class="delta down">+2 vs ayer</div></div>
+    <div class="kpi"><div class="label">Healthscore promedio</div><div class="value">7.4</div><div class="delta up">+0.3 vs sem</div></div>
+    <div class="kpi"><div class="label">Clientes en rojo</div><div class="value" style="color:var(--rojo)">3</div><div class="delta">Justo PE · BK EC · TotalPlay</div></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Cliente</th>
+        <th>AM</th>
+        <th>Healthscore</th>
+        <th>Alertas</th>
+        <th>Cerradas 24h</th>
+        <th>Más antigua</th>
+        <th>Δ volumen</th>
+        <th>Comentario ejecutivo</th>
+        <th style="width:70px">Estado</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="cliente">Burger King Ecuador<small>WS-1012</small></td>
+        <td>JX</td>
+        <td><strong style="color:var(--rojo)">5.8</strong></td>
+        <td>6</td>
+        <td>2</td>
+        <td><span style="color:var(--rojo);font-weight:600">72h</span></td>
+        <td style="color:var(--rojo)">-24%</td>
+        <td class="dossier">Caída volumen por bug liberaciones. Alex trabajando en fix. Call mañana 11am.</td>
+        <td><span class="sem sem-rojo"></span>Rojo</td>
+      </tr>
+      <tr>
+        <td class="cliente">Justo Perú<small>WS-1845</small></td>
+        <td>Carlos</td>
+        <td><strong style="color:var(--rojo)">6.1</strong></td>
+        <td>4</td>
+        <td>1</td>
+        <td><span style="color:var(--rojo);font-weight:600">58h</span></td>
+        <td style="color:var(--rojo)">-18%</td>
+        <td class="dossier">Concentración PedidosYa 92%. Reasignar mix. Ricardo ya avisado.</td>
+        <td><span class="sem sem-rojo"></span>Rojo</td>
+      </tr>
+      <tr>
+        <td class="cliente">TotalPlay<small>WS-1990 · MX</small></td>
+        <td>Carlos</td>
+        <td><strong style="color:var(--amarillo)">6.4</strong></td>
+        <td>3</td>
+        <td>0</td>
+        <td><span style="color:var(--rojo);font-weight:600">96h</span></td>
+        <td>-8%</td>
+        <td class="dossier">MBR pendiente desde lunes. Healthscore bajo por issues POD.</td>
+        <td><span class="sem sem-rojo"></span>Rojo</td>
+      </tr>
+      <tr>
+        <td class="cliente">KFC Colombia<small>WS-1501</small></td>
+        <td>JX</td>
+        <td><strong style="color:var(--amarillo)">7.0</strong></td>
+        <td>2</td>
+        <td>3</td>
+        <td>18h</td>
+        <td>-5%</td>
+        <td class="dossier">Estable. Seguir monitoreo fulfillment fin de semana.</td>
+        <td><span class="sem sem-amarillo"></span>Amarillo</td>
+      </tr>
+      <tr>
+        <td class="cliente">Pizza Hut Colombia<small>WS-1633</small></td>
+        <td>JX</td>
+        <td><strong style="color:var(--verde)">8.2</strong></td>
+        <td>1</td>
+        <td>2</td>
+        <td>6h</td>
+        <td style="color:var(--verde)">+12%</td>
+        <td class="dossier">Crecimiento sostenido. Candidato para upsell módulo Fleet.</td>
+        <td><span class="sem sem-verde"></span>Verde</td>
+      </tr>
+      <tr>
+        <td class="cliente">Grupo Sala<small>WS-1702 · EC</small></td>
+        <td>JX</td>
+        <td><strong style="color:var(--verde)">8.0</strong></td>
+        <td>0</td>
+        <td>1</td>
+        <td>—</td>
+        <td style="color:var(--verde)">+6%</td>
+        <td class="dossier">Sin novedad. Próximo MBR 22 abr.</td>
+        <td><span class="sem sem-verde"></span>Verde</td>
+      </tr>
+      <tr>
+        <td class="cliente">Tacos de Barbacoa<small>WS-1822 · MX</small></td>
+        <td>Carlos</td>
+        <td><strong style="color:var(--verde)">7.8</strong></td>
+        <td>1</td>
+        <td>0</td>
+        <td>12h</td>
+        <td>+2%</td>
+        <td class="dossier">Estable. Stephanie apoyando en zona sur CDMX.</td>
+        <td><span class="sem sem-verde"></span>Verde</td>
+      </tr>
+      <tr>
+        <td colspan="9" style="text-align:center;color:var(--gris-txt);padding:20px">+ 13 clientes más — (Top 20 completo)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="ops-box">
+    <h3>Operativo 24h — reporte Camilo / Stephanie</h3>
+    <div class="row">
+      <div>
+        <label>Pedidos fallidos últimas 24h</label>
+        <textarea>147 / 8,902 totales · 1.65% UFR · Pico 14-16h en Quito (cobertura Uber baja)</textarea>
+      </div>
+      <div>
+        <label>Ciudades bajo umbral / patrones recurrentes</label>
+        <textarea>Medellín: PedidosYa 78% fulfillment · Guayaquil: fleet stuck BK 3 bookings · CDMX Sur: Rappi intermitente</textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function show(tab) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('view-' + tab).classList.add('active');
+    event.target.closest('.tab').classList.add('active');
+  }
+</script>
+
+</body>
+</html>

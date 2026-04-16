@@ -70,12 +70,35 @@ function v2RenderRollouts() {
   );
   const body = document.getElementById('v2RolloutsBody');
   if (!rows.length) {
-    v2SetHTML(body, '<tr><td colspan="12" class="v2-empty">Sin rollouts con esos filtros.</td></tr>');
+    v2SetHTML(body, '<tr><td colspan="14" class="v2-empty">Sin rollouts con esos filtros.</td></tr>');
     return;
   }
+  const fmtNum = (v) => (v == null || v === '') ? '&mdash;' : Number(v).toLocaleString('en-US');
   const html = rows.map(r => {
-    const loc = [r.locales_totales, r.locales_piloto].filter(x => x != null).join(' / ') || '&mdash;';
-    const envios = r.envios_mes_target ? r.envios_mes_target.toLocaleString('en-US') : '&mdash;';
+    const techoEnv = fmtNum(r.envios_mes_target);
+    // Proyeccion lineal MTD: si el sync llena envios_proyeccion_mes usar eso; fallback a calculo en base a envios_mtd
+    let proyMtd = '&mdash;';
+    if (r.envios_proyeccion_mes != null) {
+      proyMtd = fmtNum(r.envios_proyeccion_mes);
+    } else if (r.envios_mtd != null) {
+      const now = new Date();
+      const day = now.getDate();
+      const dim = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      const proj = Math.round((Number(r.envios_mtd) / day) * dim);
+      proyMtd = proj.toLocaleString('en-US');
+    }
+    // Color de proyeccion vs techo
+    let proyStyle = '';
+    if (r.envios_mes_target && proyMtd !== '&mdash;') {
+      const projVal = typeof r.envios_proyeccion_mes === 'number' ? r.envios_proyeccion_mes
+        : Math.round((Number(r.envios_mtd || 0) / new Date().getDate()) * new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate());
+      const ratio = projVal / Number(r.envios_mes_target);
+      if (ratio >= 0.95) proyStyle = 'style="color:var(--verde-500);font-weight:700"';
+      else if (ratio >= 0.75) proyStyle = 'style="color:var(--amarillo);font-weight:700"';
+      else proyStyle = 'style="color:var(--rojo);font-weight:700"';
+    }
+    const techoLoc = fmtNum(r.locales_totales);
+    const locAct = fmtNum(r.locales_activos != null ? r.locales_activos : r.locales_piloto);
     const statusPill = r.status_integracion
       ? '<span class="v2-pill v2-pill-' + v2StatusPillColor(r.status_integracion) + '">' + v2Esc(r.status_integracion) + '</span>'
       : '&mdash;';
@@ -89,8 +112,10 @@ function v2RenderRollouts() {
       '<td>' + v2Esc(r.am_owner || '—') + '</td>' +
       '<td>' + v2Esc(r.ventas_owner || '—') + '</td>' +
       '<td>' + v2Esc(r.pais || '—') + '</td>' +
-      '<td class="num">' + envios + '</td>' +
-      '<td>' + loc + '</td>' +
+      '<td class="num">' + techoEnv + '</td>' +
+      '<td class="num" ' + proyStyle + '>' + proyMtd + '</td>' +
+      '<td class="num">' + techoLoc + '</td>' +
+      '<td class="num">' + locAct + '</td>' +
       '<td>' + statusPill + '</td>' +
       '<td>' + contratoPill + '</td>' +
       '<td><div class="v2-dossier v2-editable" data-id="' + safeId + '" data-field="dossier_ejecutivo" contenteditable="true" onblur="v2SaveInline(this,\'rollouts\')">' + v2Esc(r.dossier_ejecutivo || '') + '</div></td>' +
@@ -282,13 +307,23 @@ function v2RenderHealthCheck() {
 
   const body = document.getElementById('v2HCBody');
   if (!rows.length) {
-    v2SetHTML(body, '<tr><td colspan="11" class="v2-empty">Sin resultados con esos filtros.</td></tr>');
+    v2SetHTML(body, '<tr><td colspan="12" class="v2-empty">Sin resultados con esos filtros.</td></tr>');
     return;
   }
+  const fmtDelta = (v) => {
+    if (v == null) return { txt:'—', style:'' };
+    const n = Number(v);
+    const txt = (n > 0 ? '+' : '') + n.toFixed(0) + '%';
+    const style = n >= 5 ? 'style="color:var(--verde-500);font-weight:700"'
+      : n <= -10 ? 'style="color:var(--rojo);font-weight:700"'
+      : n <= -5 ? 'style="color:var(--amarillo);font-weight:700"' : '';
+    return { txt, style };
+  };
   const html = rows.map(r => {
-    const delta = r.delta_volumen_pct;
-    const deltaStyle = delta == null ? '' : (delta > 0 ? 'style="color:var(--verde-500)"' : (delta < -10 ? 'style="color:var(--rojo)"' : ''));
-    const deltaTxt = delta == null ? '—' : (delta > 0 ? '+' : '') + Number(delta).toFixed(0) + '%';
+    const mtd = r.rides_mtd != null ? Number(r.rides_mtd).toLocaleString('en-US') : '—';
+    const ytd = r.rides_ytd != null ? Number(r.rides_ytd).toLocaleString('en-US') : '—';
+    const dSem = fmtDelta(r.delta_semana_ant_pct);
+    const d12 = fmtDelta(r.delta_12sem_pct);
     const hs = r.healthscore == null ? '—' : Number(r.healthscore).toFixed(1);
     const hsColor = r.healthscore == null ? '' : (r.healthscore < 6.5 ? 'color:var(--rojo)' : r.healthscore < 7.5 ? 'color:var(--amarillo)' : 'color:var(--verde-500)');
     const safeId = v2Esc(r.id);
@@ -298,9 +333,10 @@ function v2RenderHealthCheck() {
       '<td class="v2-cliente">' + v2Esc(r.workspace_name) + '<small>' + v2Esc(r.workspace_id || '') + '</small></td>' +
       '<td>' + v2Esc(r.am_owner || '—') + '</td>' +
       '<td>' + v2Esc(r.pais || '—') + '</td>' +
-      '<td class="num">$' + Math.round(r.rev_q_usd || 0).toLocaleString('en-US') + '</td>' +
-      '<td class="num">' + (r.rides_q || 0).toLocaleString('en-US') + '</td>' +
-      '<td class="num" ' + deltaStyle + '>' + deltaTxt + '</td>' +
+      '<td class="num">' + mtd + '</td>' +
+      '<td class="num">' + ytd + '</td>' +
+      '<td class="num" ' + dSem.style + '>' + dSem.txt + '</td>' +
+      '<td class="num" ' + d12.style + '>' + d12.txt + '</td>' +
       '<td class="num" style="' + hsColor + ';font-weight:700">' + hs + '</td>' +
       '<td>' + (r.alertas_abiertas || 0) + (r.alertas_criticas ? ' <span class="v2-pill v2-pill-rojo">' + r.alertas_criticas + '</span>' : '') + '</td>' +
       '<td><div class="v2-dossier v2-editable" data-id="' + safeId + '" data-field="comentario_ejecutivo" contenteditable="true" onblur="v2SaveInline(this,\'health_check_top30\')">' + v2Esc(r.comentario_ejecutivo || '') + '</div></td>' +

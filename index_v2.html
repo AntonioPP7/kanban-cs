@@ -29,7 +29,7 @@
   --sidebar-w: 220px; --header-h: 56px;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul-oscuro-500); overflow:hidden; height:100vh; }
+body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul-oscuro-500); overflow:hidden; height:100vh; display:flex; flex-direction:column; }
 /* Header */
 .header { height:var(--header-h); background:var(--azul-oscuro-900); display:flex; align-items:center; padding:0 20px; gap:16px; z-index:100; position:relative; }
 .header .logo { color:#fff; font-weight:700; font-size:15px; letter-spacing:.5px; }
@@ -224,7 +224,7 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
 .v2-tab.active .v2-badge { background:var(--celeste-100); }
 .v2-banner { background:#fff3cd; border-bottom:1px solid #ffe69c; color:#664d03; font-size:11px; padding:6px 16px; text-align:center; font-weight:600; }
 
-.v2-view { display:none; flex:1; overflow:auto; padding:20px 24px; background:var(--neutral-100); }
+.v2-view { display:none; flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; padding:20px 24px; background:var(--neutral-100); }
 .v2-view.v2-active { display:block; }
 #view-ciclo.v2-active { display:flex; flex-direction:column; padding:0; overflow:hidden; background:transparent; }
 
@@ -242,6 +242,10 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
 .v2-table { width:100%; border-collapse:collapse; font-size:12px; }
 .v2-table th { background:#f8fafc; text-align:left; padding:11px 12px; font-size:10px; text-transform:uppercase; color:var(--neutral-800); border-bottom:1px solid var(--neutral-200); letter-spacing:.04em; font-weight:700; position:sticky; top:0; }
 .v2-table td { padding:12px; border-bottom:1px solid var(--neutral-200); vertical-align:top; color:var(--azul-oscuro-900); }
+#v2HCTable th { padding:8px 10px; }
+#v2HCTable td { padding:7px 10px; font-size:11px; }
+#v2HCTable .v2-cliente { font-size:11px; }
+#v2HCTable .v2-dossier { max-width:220px; font-size:10px; }
 .v2-table tr:last-child td { border-bottom:0; }
 .v2-table tr:hover td { background:#fafbfc; }
 .v2-table .num { text-align:right; font-variant-numeric:tabular-nums; }
@@ -533,8 +537,10 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
           <th>AM</th>
           <th>Ventas</th>
           <th>Pais</th>
-          <th class="num">Envios/mes</th>
-          <th>Locales</th>
+          <th class="num" title="Techo comprometido envios/mes">Techo env</th>
+          <th class="num" title="Proyeccion lineal fin de mes (MTD / dias transcurridos * dias del mes)">Proy MTD</th>
+          <th class="num" title="Techo de locales del cliente">Techo loc</th>
+          <th class="num" title="Locales activos (con envios en los ultimos 14 dias)">Loc act</th>
           <th>Status</th>
           <th>Contrato</th>
           <th>Dossier ejecutivo</th>
@@ -544,7 +550,7 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
         </tr>
       </thead>
       <tbody id="v2RolloutsBody">
-        <tr><td colspan="12" class="v2-empty">Cargando rollouts...</td></tr>
+        <tr><td colspan="14" class="v2-empty">Cargando rollouts...</td></tr>
       </tbody>
     </table>
   </div>
@@ -587,9 +593,10 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
           <th>Cliente</th>
           <th>AM</th>
           <th>Pais</th>
-          <th class="num">Rev Q</th>
-          <th class="num">Rides Q</th>
-          <th class="num">Δ Vol %</th>
+          <th class="num" title="Rides mes actual (MTD)">Rides MTD</th>
+          <th class="num" title="Rides acumulados del anio (YTD)">Rides YTD</th>
+          <th class="num" title="Variacion % vs semana anterior">Δ sem</th>
+          <th class="num" title="Variacion % vs promedio ultimas 12 semanas">Δ 12s</th>
           <th class="num">Health</th>
           <th>Alertas</th>
           <th>Comentario ejecutivo</th>
@@ -597,7 +604,7 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
         </tr>
       </thead>
       <tbody id="v2HCBody">
-        <tr><td colspan="11" class="v2-empty">Cargando health check...</td></tr>
+        <tr><td colspan="12" class="v2-empty">Cargando health check...</td></tr>
       </tbody>
     </table>
   </div>

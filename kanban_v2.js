@@ -266,7 +266,7 @@ async function v2LoadHealthCheck() {
     if (e1) throw e1;
     if (!latestDate || !latestDate.length) {
       v2SetHTML(document.getElementById('v2HCBody'),
-        '<tr><td colspan="11" class="v2-empty">No hay snapshot aun. El sync <code>health_check_top30</code> todavia no corrio.<br>Cuando este listo, aqui aparecera el Top 30 del NDR + healthscore de Supabase.</td></tr>');
+        '<tr><td colspan="14" class="v2-empty">No hay snapshot aun. El sync <code>health_check_top30</code> todavia no corrio.<br>Cuando este listo, aqui aparecera el Top 30 del NDR + healthscore de Supabase.</td></tr>');
       document.getElementById('v2HCSnapshotDate').textContent = 'Snapshot: sin datos';
       v2Loaded.hc = true;
       return;
@@ -284,7 +284,7 @@ async function v2LoadHealthCheck() {
     v2LoadOpsNotes();
   } catch (err) {
     v2SetHTML(document.getElementById('v2HCBody'),
-      '<tr><td colspan="11" class="v2-empty">Error: ' + v2Esc(err.message) + '</td></tr>');
+      '<tr><td colspan="14" class="v2-empty">Error: ' + v2Esc(err.message) + '</td></tr>');
     console.error('[v2 hc]', err);
   }
 }
@@ -307,8 +307,23 @@ function v2RenderHealthCheck() {
 
   const body = document.getElementById('v2HCBody');
   if (!rows.length) {
-    v2SetHTML(body, '<tr><td colspan="12" class="v2-empty">Sin resultados con esos filtros.</td></tr>');
+    v2SetHTML(body, '<tr><td colspan="14" class="v2-empty">Sin resultados con esos filtros.</td></tr>');
     return;
+  }
+  // Actualizar headers con numero de semana ISO (lo toma del primer row con data)
+  const sample = v2HealthCheck.find(r => r.semana_ant_num != null || r.semana_actual_num != null);
+  if (sample) {
+    const setHeader = (id, label, wk) => {
+      const el = document.getElementById(id);
+      if (!el || wk == null) return;
+      el.textContent = label + ' ';
+      const small = document.createElement('small');
+      small.style.cssText = 'font-weight:400;text-transform:none';
+      small.textContent = '(W' + wk + ')';
+      el.appendChild(small);
+    };
+    setHeader('v2HCRidesSemAntHeader', 'Rides sem ant', sample.semana_ant_num);
+    setHeader('v2HCFrActualHeader', '%FR sem actual', sample.semana_actual_num);
   }
   const fmtDelta = (v) => {
     if (v == null) return { txt:'—', style:'' };
@@ -319,11 +334,24 @@ function v2RenderHealthCheck() {
       : n <= -5 ? 'style="color:var(--amarillo);font-weight:700"' : '';
     return { txt, style };
   };
+  // Variacion FR en puntos porcentuales
+  const fmtFrVar = (v) => {
+    if (v == null) return { txt:'', style:'' };
+    const n = Number(v);
+    const txt = (n > 0 ? '+' : '') + n.toFixed(1) + 'pp';
+    const style = n >= 1 ? 'color:var(--verde-500)'
+      : n <= -3 ? 'color:var(--rojo)'
+      : n <= -1 ? 'color:var(--amarillo)' : '';
+    return { txt, style };
+  };
   const html = rows.map(r => {
     const mtd = r.rides_mtd != null ? Number(r.rides_mtd).toLocaleString('en-US') : '—';
     const ytd = r.rides_ytd != null ? Number(r.rides_ytd).toLocaleString('en-US') : '—';
     const dSem = fmtDelta(r.delta_semana_ant_pct);
     const d12 = fmtDelta(r.delta_12sem_pct);
+    const ridesSemAnt = r.rides_sem_ant != null ? Number(r.rides_sem_ant).toLocaleString('en-US') : '—';
+    const frActual = r.fr_sem_actual_pct != null ? Number(r.fr_sem_actual_pct).toFixed(1) + '%' : '—';
+    const frVar = fmtFrVar(r.fr_variation_pp);
     const hs = r.healthscore == null ? '—' : Number(r.healthscore).toFixed(1);
     const hsColor = r.healthscore == null ? '' : (r.healthscore < 6.5 ? 'color:var(--rojo)' : r.healthscore < 7.5 ? 'color:var(--amarillo)' : 'color:var(--verde-500)');
     const safeId = v2Esc(r.id);
@@ -337,6 +365,8 @@ function v2RenderHealthCheck() {
       '<td class="num">' + ytd + '</td>' +
       '<td class="num" ' + dSem.style + '>' + dSem.txt + '</td>' +
       '<td class="num" ' + d12.style + '>' + d12.txt + '</td>' +
+      '<td class="num">' + ridesSemAnt + '</td>' +
+      '<td class="num">' + frActual + (frVar.txt ? ' <small style="' + frVar.style + ';font-weight:600">' + frVar.txt + '</small>' : '') + '</td>' +
       '<td class="num" style="' + hsColor + ';font-weight:700">' + hs + '</td>' +
       '<td>' + (r.alertas_abiertas || 0) + (r.alertas_criticas ? ' <span class="v2-pill v2-pill-rojo">' + r.alertas_criticas + '</span>' : '') + '</td>' +
       '<td><div class="v2-dossier v2-editable" data-id="' + safeId + '" data-field="comentario_ejecutivo" contenteditable="true" onblur="v2SaveInline(this,\'health_check_top30\')">' + v2Esc(r.comentario_ejecutivo || '') + '</div></td>' +

@@ -361,16 +361,16 @@ function v2RenderHealthCheck() {
       '<td class="v2-cliente">' + v2Esc(r.workspace_name) + '<small>' + v2Esc(r.workspace_id || '') + '</small></td>' +
       '<td>' + v2Esc(r.am_owner || '—') + '</td>' +
       '<td>' + v2Esc(r.pais || '—') + '</td>' +
-      '<td class="num">' + mtd + '</td>' +
-      '<td class="num">' + ytd + '</td>' +
-      '<td class="num" ' + dSem.style + '>' + dSem.txt + '</td>' +
-      '<td class="num" ' + d12.style + '>' + d12.txt + '</td>' +
-      '<td class="num">' + ridesSemAnt + '</td>' +
-      '<td class="num">' + frActual + (frVar.txt ? ' <small style="' + frVar.style + ';font-weight:600">' + frVar.txt + '</small>' : '') + '</td>' +
+      '<td><span class="v2-sem v2-sem-' + v2Esc(sem) + '"></span>' + v2Esc(sem) + '</td>' +
       '<td class="num" style="' + hsColor + ';font-weight:700">' + hs + '</td>' +
       '<td>' + (r.alertas_abiertas || 0) + (r.alertas_criticas ? ' <span class="v2-pill v2-pill-rojo">' + r.alertas_criticas + '</span>' : '') + '</td>' +
+      '<td class="num">' + mtd + '</td>' +
+      '<td class="num">' + ytd + '</td>' +
+      '<td class="num">' + ridesSemAnt + '</td>' +
+      '<td class="num" ' + dSem.style + '>' + dSem.txt + '</td>' +
+      '<td class="num" ' + d12.style + '>' + d12.txt + '</td>' +
+      '<td class="num">' + frActual + (frVar.txt ? ' <small style="' + frVar.style + ';font-weight:600">' + frVar.txt + '</small>' : '') + '</td>' +
       '<td><div class="v2-dossier v2-editable" data-id="' + safeId + '" data-field="comentario_ejecutivo" contenteditable="true" onblur="v2SaveInline(this,\'health_check_top30\')">' + v2Esc(r.comentario_ejecutivo || '') + '</div></td>' +
-      '<td><span class="v2-sem v2-sem-' + v2Esc(sem) + '"></span>' + v2Esc(sem) + '</td>' +
       '</tr>';
   }).join('');
   v2SetHTML(body, html);

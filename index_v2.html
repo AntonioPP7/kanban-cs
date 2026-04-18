@@ -593,16 +593,16 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
           <th title="Nombre de cuenta segun NDR. Puede diferir del workspace_name del DW (se resuelve por startswith).">Cliente</th>
           <th title="Account Manager responsable en CS.">AM</th>
           <th title="Pais del cliente. Hoy NULL — pendiente cruzar contra Zoho o silver.workspaces_report.">Pais</th>
-          <th class="num" title="Completed rides del mes en curso (dia 1 hasta hoy).">Rides MTD</th>
-          <th class="num" title="Completed rides del anio en curso (1 ene hasta hoy).">Rides YTD</th>
-          <th class="num" title="Variacion % de rides: semana actual WTD proyectada a 7d vs semana anterior completa (lun-dom ISO).">Δ sem <small style="font-weight:400;text-transform:none">(proy)</small></th>
-          <th class="num" title="Variacion % de rides: semana anterior completa vs promedio de las 12 semanas previas a ella.">Δ 12s <small style="font-weight:400;text-transform:none">(sem ant)</small></th>
-          <th class="num" id="v2HCRidesSemAntHeader" title="Completed rides de la semana anterior cerrada (lun-dom ISO).">Rides sem ant</th>
-          <th class="num" id="v2HCFrActualHeader" title="Fulfillment rate de la semana en curso WTD (completed / total bookings), con variacion en puntos porcentuales vs %FR de la semana anterior cerrada.">%FR sem actual</th>
+          <th style="width:70px" title="Verde ≥8.8 | Amarillo 7.0-8.8 | Rojo <7.0 o sin data.">Estado</th>
           <th class="num" title="Healthscore del workspace segun gold.v_workspace_health (ultimo snapshot diario). Escala 0-10.">Health</th>
           <th title="Alertas abiertas (status active + in_progress). Las criticas se resaltan (severity=critical).">Alertas</th>
+          <th class="num" title="Completed rides del mes en curso (dia 1 hasta hoy).">Rides MTD</th>
+          <th class="num" title="Completed rides del anio en curso (1 ene hasta hoy).">Rides YTD</th>
+          <th class="num" id="v2HCRidesSemAntHeader" title="Completed rides de la semana anterior cerrada (lun-dom ISO).">Rides sem ant</th>
+          <th class="num" title="Variacion % de rides: semana actual WTD proyectada a 7d vs semana anterior completa (lun-dom ISO).">Δ sem actual <small style="font-weight:400;text-transform:none">(proy)</small></th>
+          <th class="num" title="Variacion % de rides: semana anterior completa vs promedio de las 12 semanas previas a ella.">Δ 12s <small style="font-weight:400;text-transform:none">(sem ant)</small></th>
+          <th class="num" id="v2HCFrActualHeader" title="Fulfillment rate de la semana en curso WTD (completed / total bookings), con variacion en puntos porcentuales vs %FR de la semana anterior cerrada.">%FR sem actual</th>
           <th title="Campo libre del AM. Se guardara como bitacora con timestamp (pendiente implementar).">Comentario ejecutivo</th>
-          <th style="width:70px" title="Verde ≥8.8 | Amarillo 7.0-8.8 | Rojo <7.0 o sin data.">Estado</th>
         </tr>
       </thead>
       <tbody id="v2HCBody">

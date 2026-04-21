@@ -70,7 +70,7 @@ function v2RenderRollouts() {
   );
   const body = document.getElementById('v2RolloutsBody');
   if (!rows.length) {
-    v2SetHTML(body, '<tr><td colspan="14" class="v2-empty">Sin rollouts con esos filtros.</td></tr>');
+    v2SetHTML(body, '<tr><td colspan="18" class="v2-empty">Sin rollouts con esos filtros.</td></tr>');
     return;
   }
   const fmtNum = (v) => (v == null || v === '') ? '&mdash;' : Number(v).toLocaleString('en-US');
@@ -266,7 +266,7 @@ async function v2LoadHealthCheck() {
     if (e1) throw e1;
     if (!latestDate || !latestDate.length) {
       v2SetHTML(document.getElementById('v2HCBody'),
-        '<tr><td colspan="14" class="v2-empty">No hay snapshot aun. El sync <code>health_check_top30</code> todavia no corrio.<br>Cuando este listo, aqui aparecera el Top 30 del NDR + healthscore de Supabase.</td></tr>');
+        '<tr><td colspan="18" class="v2-empty">No hay snapshot aun. El sync <code>health_check_top30</code> todavia no corrio.<br>Cuando este listo, aqui aparecera el Top 30 del NDR + healthscore de Supabase.</td></tr>');
       document.getElementById('v2HCSnapshotDate').textContent = 'Snapshot: sin datos';
       v2Loaded.hc = true;
       return;
@@ -284,7 +284,7 @@ async function v2LoadHealthCheck() {
     v2LoadOpsNotes();
   } catch (err) {
     v2SetHTML(document.getElementById('v2HCBody'),
-      '<tr><td colspan="14" class="v2-empty">Error: ' + v2Esc(err.message) + '</td></tr>');
+      '<tr><td colspan="18" class="v2-empty">Error: ' + v2Esc(err.message) + '</td></tr>');
     console.error('[v2 hc]', err);
   }
 }
@@ -307,7 +307,7 @@ function v2RenderHealthCheck() {
 
   const body = document.getElementById('v2HCBody');
   if (!rows.length) {
-    v2SetHTML(body, '<tr><td colspan="14" class="v2-empty">Sin resultados con esos filtros.</td></tr>');
+    v2SetHTML(body, '<tr><td colspan="18" class="v2-empty">Sin resultados con esos filtros.</td></tr>');
     return;
   }
   // Actualizar headers con numero de semana ISO (lo toma del primer row con data)
@@ -344,6 +344,26 @@ function v2RenderHealthCheck() {
       : n <= -1 ? 'color:var(--amarillo)' : '';
     return { txt, style };
   };
+  // Costo oportunidad: % penalidades sobre billing. Menor = mejor.
+  const fmtCostoOpp = (v) => {
+    if (v == null) return { txt:'—', style:'' };
+    const n = Number(v);
+    const txt = n.toFixed(1) + '%';
+    const style = n >= 5 ? 'style="color:var(--rojo);font-weight:700"'
+      : n >= 2 ? 'style="color:var(--amarillo);font-weight:700"'
+      : 'style="color:var(--verde-500);font-weight:600"';
+    return { txt, style };
+  };
+  // Take rate: % billing / order value. No hay umbrales de bueno/malo, solo informativo.
+  const fmtTakeRate = (v, cov) => {
+    if (v == null) {
+      const title = cov != null && cov < 20
+        ? ' title="Cobertura de order_amount ' + Number(cov).toFixed(0) + '% (<20%). Cliente no reporta valor del pedido en la mayoria de bookings."'
+        : '';
+      return { txt:'<span' + title + '>—</span>', style:'' };
+    }
+    return { txt: Number(v).toFixed(1) + '%', style:'' };
+  };
   const html = rows.map(r => {
     const mtd = r.rides_mtd != null ? Number(r.rides_mtd).toLocaleString('en-US') : '—';
     const ytd = r.rides_ytd != null ? Number(r.rides_ytd).toLocaleString('en-US') : '—';
@@ -352,6 +372,10 @@ function v2RenderHealthCheck() {
     const ridesSemAnt = r.rides_sem_ant != null ? Number(r.rides_sem_ant).toLocaleString('en-US') : '—';
     const frActual = r.fr_sem_actual_pct != null ? Number(r.fr_sem_actual_pct).toFixed(1) + '%' : '—';
     const frVar = fmtFrVar(r.fr_variation_pp);
+    const coppMtd = fmtCostoOpp(r.costo_opp_mtd_pct);
+    const coppYtd = fmtCostoOpp(r.costo_opp_ytd_pct);
+    const trMtd = fmtTakeRate(r.take_rate_mtd_pct, r.orden_coverage_mtd_pct);
+    const trYtd = fmtTakeRate(r.take_rate_ytd_pct, r.orden_coverage_ytd_pct);
     const hs = r.healthscore == null ? '—' : Number(r.healthscore).toFixed(1);
     const hsColor = r.healthscore == null ? '' : (r.healthscore < 6.5 ? 'color:var(--rojo)' : r.healthscore < 7.5 ? 'color:var(--amarillo)' : 'color:var(--verde-500)');
     const safeId = v2Esc(r.id);
@@ -370,6 +394,10 @@ function v2RenderHealthCheck() {
       '<td class="num" ' + dSem.style + '>' + dSem.txt + '</td>' +
       '<td class="num" ' + d12.style + '>' + d12.txt + '</td>' +
       '<td class="num">' + frActual + (frVar.txt ? ' <small style="' + frVar.style + ';font-weight:600">' + frVar.txt + '</small>' : '') + '</td>' +
+      '<td class="num" ' + coppMtd.style + '>' + coppMtd.txt + '</td>' +
+      '<td class="num" ' + coppYtd.style + '>' + coppYtd.txt + '</td>' +
+      '<td class="num">' + trMtd.txt + '</td>' +
+      '<td class="num">' + trYtd.txt + '</td>' +
       '<td><div class="v2-dossier v2-editable" data-id="' + safeId + '" data-field="comentario_ejecutivo" contenteditable="true" onblur="v2SaveInline(this,\'health_check_top30\')">' + v2Esc(r.comentario_ejecutivo || '') + '</div></td>' +
       '</tr>';
   }).join('');

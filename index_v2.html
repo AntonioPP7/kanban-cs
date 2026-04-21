@@ -602,11 +602,15 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
           <th class="num" title="Variacion % de rides: semana actual WTD proyectada a 7d vs semana anterior completa (lun-dom ISO).">Δ sem actual <small style="font-weight:400;text-transform:none">(proy)</small></th>
           <th class="num" title="Variacion % de rides: semana anterior completa vs promedio de las 12 semanas previas a ella.">Δ 12s <small style="font-weight:400;text-transform:none">(sem ant)</small></th>
           <th class="num" id="v2HCFrActualHeader" title="Fulfillment rate de la semana en curso WTD (completed / total bookings), con variacion en puntos porcentuales vs %FR de la semana anterior cerrada.">%FR sem actual</th>
+          <th class="num" title="Costo de oportunidad MTD: % del billing Picker (revenue_usd) que se absorbe en penalidades operativas (costo_cancelacion + costo_retorno + costo_wt). Fuente: cfo.base_maestra_mat. Mes en curso.">Costo Opp MTD</th>
+          <th class="num" title="Costo de oportunidad YTD: % del billing Picker (revenue_usd) que se absorbe en penalidades operativas (costo_cancelacion + costo_retorno + costo_wt). Fuente: cfo.base_maestra_mat. Anio en curso.">Costo Opp YTD</th>
+          <th class="num" title="Take rate MTD: SUM(billing Picker) / SUM(order value del cliente). Solo bookings con orden>0, en USD. Muestra '—' si cobertura de orden <20% (cliente no reporta valor del pedido). Fuente: cfo.base_maestra_mat.">Take Rate MTD</th>
+          <th class="num" title="Take rate YTD: SUM(billing Picker) / SUM(order value del cliente). Solo bookings con orden>0, en USD. Muestra '—' si cobertura de orden <20%. Fuente: cfo.base_maestra_mat.">Take Rate YTD</th>
           <th title="Campo libre del AM. Se guardara como bitacora con timestamp (pendiente implementar).">Comentario ejecutivo</th>
         </tr>
       </thead>
       <tbody id="v2HCBody">
-        <tr><td colspan="14" class="v2-empty">Cargando health check...</td></tr>
+        <tr><td colspan="18" class="v2-empty">Cargando health check...</td></tr>
       </tbody>
     </table>
   </div>

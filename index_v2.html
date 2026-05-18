@@ -1612,7 +1612,7 @@ async function closeCycleModal() {
 }
 
 async function closeCycle() {
-  if (!confirm('Cerrar ciclo actual?\n\n- Tarjetas completadas se eliminaran\n- Tarjetas en progreso/bloqueadas pasan a pendiente\n- Se abrira un nuevo ciclo')) return;
+  if (!confirm('Cerrar ciclo actual?\n\n- Tarjetas completadas se eliminaran\n- El resto de tarjetas (pendiente, en progreso, bloqueado) se mantienen sin cambios\n- Se abrira un nuevo ciclo')) return;
 
   try {
     // Delete completed cards from Supabase
@@ -1623,16 +1623,6 @@ async function closeCycle() {
         .delete()
         .in('id', completedIds);
       if (delErr) throw delErr;
-    }
-
-    // Move in_progress and bloqueado to pendiente
-    const toResetIds = cards.filter(c => c.status === 'en_progreso' || c.status === 'bloqueado').map(c => c.id);
-    if (toResetIds.length > 0) {
-      const { error: upErr } = await sb
-        .from('kanban_cards')
-        .update({ status: 'pendiente' })
-        .in('id', toResetIds);
-      if (upErr) throw upErr;
     }
 
     // Update cycle

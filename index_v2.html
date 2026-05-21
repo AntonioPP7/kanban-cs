@@ -750,6 +750,7 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
       <div>
         <label>Tier</label>
         <select id="cardTier">
+          <option value="">(sin definir)</option>
           <option value="T1-P">T1-P</option>
           <option value="T1">T1</option>
           <option value="T2">T2</option>
@@ -761,6 +762,7 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
       <div>
         <label>Estado cliente</label>
         <select id="cardClientStatus">
+          <option value="">(sin definir)</option>
           <option value="activo">Activo</option>
           <option value="piloto">Piloto</option>
           <option value="en_riesgo">En Riesgo</option>
@@ -1534,8 +1536,8 @@ async function saveCard() {
     module: document.getElementById('cardModule').value.trim(),
     dueDate: document.getElementById('cardDue').value,
     country: document.getElementById('cardCountry').value,
-    tier: document.getElementById('cardTier').value,
-    clientStatus: document.getElementById('cardClientStatus').value,
+    tier: document.getElementById('cardTier').value || null,
+    clientStatus: document.getElementById('cardClientStatus').value || null,
     origin: document.getElementById('cardOrigin').value,
     blockedBy: document.getElementById('cardBlockedBy').value.trim(),
     notes: document.getElementById('cardNotes').value.trim(),

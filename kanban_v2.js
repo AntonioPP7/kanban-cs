@@ -7,6 +7,8 @@
 let v2Rollouts = [];
 let v2HealthCheck = [];
 let v2HCSnapshotDate = null;
+let v2Watchlist = [];
+let v2WatchlistSnapshotDate = null;
 let v2Loaded = { rollouts: false, hc: false };
 
 function v2Esc(s) {
@@ -27,7 +29,10 @@ function v2ShowTab(tab) {
   document.getElementById('view-' + tab).classList.add('v2-active');
   document.querySelector('.v2-tab[data-v2-tab="' + tab + '"]').classList.add('active');
   if (tab === 'rollouts' && !v2Loaded.rollouts) v2LoadRollouts();
-  if (tab === 'healthcheck' && !v2Loaded.hc) v2LoadHealthCheck();
+  if (tab === 'healthcheck' && !v2Loaded.hc) {
+    v2LoadHealthCheck();
+    v2LoadWatchlist();
+  }
 }
 
 // ============================================================
@@ -380,10 +385,14 @@ function v2RenderHealthCheck() {
     const hsColor = r.healthscore == null ? '' : (r.healthscore < 6.5 ? 'color:var(--rojo)' : r.healthscore < 7.5 ? 'color:var(--amarillo)' : 'color:var(--verde-500)');
     const safeId = v2Esc(r.id);
     const sem = r.semaforo || 'verde';
+    const aiBtn = r.preguntas_ai
+      ? '<button class="v2-ai-btn" title="Ver preguntas cinicas AI" onclick="v2OpenPreguntasModal(\'top30\',\'' + v2Esc(r.id) + '\')">&#129302;</button>'
+      : '<span class="v2-ai-btn-empty" title="Aun no generadas (proximo lunes 8:30 AM)">&#129302;</span>';
     return '<tr>' +
       '<td>' + (r.rank || '—') + '</td>' +
       '<td class="v2-cliente">' + v2Esc(r.workspace_name) + '<small>' + v2Esc(r.workspace_id || '') + '</small></td>' +
       '<td>' + v2Esc(r.am_owner || '—') + '</td>' +
+      '<td class="v2-ai-cell">' + aiBtn + '</td>' +
       '<td>' + v2Esc(r.pais || '—') + '</td>' +
       '<td><span class="v2-sem v2-sem-' + v2Esc(sem) + '"></span>' + v2Esc(sem) + '</td>' +
       '<td class="num" style="' + hsColor + ';font-weight:700">' + hs + '</td>' +
@@ -438,4 +447,137 @@ async function v2SaveOpsNotes() {
     status.textContent = 'Error: ' + err.message;
     console.error(err);
   }
+}
+
+// ============================================================
+// WATCHLIST — Top 10 fuera del Top 30 oficial
+// Sync semanal lunes 8:00 AM (Picker_WatchlistSync). Lectura readonly desde el frontend.
+// ============================================================
+
+async function v2LoadWatchlist() {
+  const body = document.getElementById('v2WatchlistBody');
+  try {
+    const { data: latest, error: e1 } = await sb.from('health_check_watchlist')
+      .select('snapshot_date')
+      .order('snapshot_date', { ascending: false })
+      .limit(1);
+    if (e1) throw e1;
+    if (!latest || !latest.length) {
+      v2SetHTML(body, '<tr><td colspan="12" class="v2-empty">Sin snapshot aun. El sync watchlist corre lunes 8:00 AM.</td></tr>');
+      document.getElementById('v2WatchlistSnapshotDate').textContent = 'Snapshot: sin datos';
+      return;
+    }
+    v2WatchlistSnapshotDate = latest[0].snapshot_date;
+    const { data, error } = await sb.from('health_check_watchlist')
+      .select('*')
+      .eq('snapshot_date', v2WatchlistSnapshotDate)
+      .order('rank', { ascending: true });
+    if (error) throw error;
+    v2Watchlist = data || [];
+    document.getElementById('v2WatchlistSnapshotDate').textContent = 'Snapshot: ' + v2WatchlistSnapshotDate;
+    v2RenderWatchlist();
+  } catch (err) {
+    v2SetHTML(body, '<tr><td colspan="12" class="v2-empty">Error: ' + v2Esc(err.message) + '</td></tr>');
+    console.error('[v2 watchlist]', err);
+  }
+}
+
+function v2RenderWatchlist() {
+  const body = document.getElementById('v2WatchlistBody');
+  if (!v2Watchlist.length) {
+    v2SetHTML(body, '<tr><td colspan="12" class="v2-empty">Sin candidatos esta semana.</td></tr>');
+    return;
+  }
+  const fmtUsd = (v) => v == null ? '—' : '$' + Math.round(Number(v)).toLocaleString('en-US');
+  const fmtPct = (v, decimals) => v == null ? '—' : Number(v).toFixed(decimals || 1) + '%';
+  const html = v2Watchlist.map(r => {
+    const aiBtn = r.preguntas_ai
+      ? '<button class="v2-ai-btn" title="Ver preguntas cinicas AI" onclick="v2OpenPreguntasModal(\'watchlist\',\'' + v2Esc(r.id) + '\')">&#129302;</button>'
+      : '<span class="v2-ai-btn-empty" title="Aun no generadas (proximo lunes 8:30 AM)">&#129302;</span>';
+    const hsColor = r.health_score == null ? '' : (r.health_score < 6.5 ? 'color:var(--rojo)' : r.health_score < 7.5 ? 'color:var(--amarillo)' : 'color:var(--verde-500)');
+    const churnColor = r.churn_risk_pct == null ? '' : (Number(r.churn_risk_pct) >= 50 ? 'color:var(--rojo);font-weight:700' : Number(r.churn_risk_pct) >= 20 ? 'color:var(--amarillo);font-weight:700' : '');
+    const ownerShort = r.workspace_cs_owner_id ? v2Esc(r.workspace_cs_owner_id.substring(0, 8)) + '…' : '<span style="color:var(--rojo)">sin AM</span>';
+    return '<tr>' +
+      '<td>' + (r.rank || '—') + '</td>' +
+      '<td class="v2-cliente">' + v2Esc(r.workspace_name) + '<small>' + v2Esc(r.workspace_id || '') + '</small></td>' +
+      '<td class="v2-ai-cell">' + aiBtn + '</td>' +
+      '<td>' + v2Esc(r.pais || '—') + '</td>' +
+      '<td class="num">' + (r.comp_mtd != null ? Number(r.comp_mtd).toLocaleString('en-US') : '—') + '</td>' +
+      '<td class="num" style="font-weight:700">' + (r.proj_mtd != null ? Number(r.proj_mtd).toLocaleString('en-US') : '—') + '</td>' +
+      '<td class="num">' + fmtPct(r.ff_pct, 1) + '</td>' +
+      '<td class="num">' + fmtUsd(r.mrr_usd) + '</td>' +
+      '<td class="num" style="' + hsColor + ';font-weight:700">' + (r.health_score == null ? '—' : Number(r.health_score).toFixed(1)) + '</td>' +
+      '<td class="num" style="' + churnColor + '">' + fmtPct(r.churn_risk_pct, 0) + '</td>' +
+      '<td>' + v2Esc(r.last_booking_date || '—') + '</td>' +
+      '<td><small style="font-family:monospace;font-size:10px">' + ownerShort + '</small></td>' +
+      '</tr>';
+  }).join('');
+  v2SetHTML(body, html);
+}
+
+function v2ToggleWatchlist() {
+  const c = document.getElementById('v2WatchlistContainer');
+  const btn = document.getElementById('v2WatchlistToggle');
+  if (c.style.display === 'none') { c.style.display = ''; btn.textContent = 'Ocultar'; }
+  else { c.style.display = 'none'; btn.textContent = 'Mostrar'; }
+}
+
+// ============================================================
+// PREGUNTAS CINICAS AI — modal con markdown render simple
+// El contenido viene de Claude Haiku (generate_preguntas_ai.py).
+// Aunque la fuente es controlada, escapamos cada linea con v2Esc antes de aplicar
+// markdown formatting limitado (numbered lists, **bold**, *italic*).
+// ============================================================
+
+function v2RenderMarkdown(md) {
+  const lines = String(md == null ? '' : md).split(/\r?\n/);
+  const parts = [];
+  let inList = false;
+  for (const rawLine of lines) {
+    const m = rawLine.match(/^\s*(\d+)\.\s+(.+)$/);
+    if (m) {
+      if (!inList) { parts.push('<ol style="padding-left:20px;margin:0">'); inList = true; }
+      let item = v2Esc(m[2]);
+      item = item.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      item = item.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+      parts.push('<li style="margin-bottom:10px">' + item + '</li>');
+    } else if (rawLine.trim() === '') {
+      if (inList) { parts.push('</ol>'); inList = false; }
+    } else {
+      if (inList) { parts.push('</ol>'); inList = false; }
+      let para = v2Esc(rawLine);
+      para = para.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      para = para.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+      parts.push('<p style="margin:8px 0">' + para + '</p>');
+    }
+  }
+  if (inList) parts.push('</ol>');
+  return parts.join('');
+}
+
+function v2OpenPreguntasModal(kind, rowId) {
+  const collection = kind === 'top30' ? v2HealthCheck : v2Watchlist;
+  const row = collection.find(r => String(r.id) === String(rowId));
+  if (!row) return;
+  const title = (kind === 'top30' ? 'Top 30' : 'Watchlist') + ' · ' + row.workspace_name;
+  document.getElementById('v2PreguntasTitle').textContent = 'Preguntas Cinicas AI — ' + title;
+  const gen = row.preguntas_ai_generated_at
+    ? new Date(row.preguntas_ai_generated_at).toLocaleString('es-EC', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+    : '—';
+  const meta = [];
+  if (row.pais) meta.push('Pais: ' + row.pais);
+  if (row.am_owner) meta.push('AM: ' + row.am_owner);
+  meta.push('Generado: ' + gen);
+  document.getElementById('v2PreguntasMeta').textContent = meta.join(' · ');
+  const body = document.getElementById('v2PreguntasBody');
+  if (!row.preguntas_ai) {
+    v2SetHTML(body, '<em>Aun no se han generado preguntas para este workspace. El cron corre lunes 8:30 AM.</em>');
+  } else {
+    v2SetHTML(body, v2RenderMarkdown(row.preguntas_ai));
+  }
+  document.getElementById('v2PreguntasModal').classList.add('open');
+}
+
+function v2ClosePreguntasModal() {
+  document.getElementById('v2PreguntasModal').classList.remove('open');
 }

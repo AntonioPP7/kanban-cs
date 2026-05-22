@@ -302,6 +302,12 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
 .v2-modal input, .v2-modal select, .v2-modal textarea { width:100%; padding:8px 10px; border:1px solid var(--neutral-300); border-radius:6px; font-size:12px; font-family:inherit; color:var(--azul-oscuro-900); }
 .v2-modal textarea { min-height:60px; resize:vertical; }
 .v2-modal .v2-modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; padding-top:14px; border-top:1px solid var(--neutral-200); }
+
+/* AI Preguntas Cinicas — boton en cada row */
+.v2-ai-cell { text-align:center; padding:4px 2px !important; }
+.v2-ai-btn { background:linear-gradient(135deg,#a78bfa,#8b5cf6); color:#fff; border:none; border-radius:6px; padding:3px 7px; font-size:14px; cursor:pointer; transition:transform .1s, box-shadow .1s; line-height:1; }
+.v2-ai-btn:hover { transform:scale(1.1); box-shadow:0 2px 6px rgba(139,92,246,.4); }
+.v2-ai-btn-empty { color:#cbd5e0; font-size:14px; cursor:not-allowed; opacity:.5; }
 </style>
 </head>
 <body>
@@ -317,7 +323,7 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
 <div class="error-banner" id="errorBanner"></div>
 
 <!-- V2 Banner -->
-<div class="v2-banner">v2 PREVIEW · En pruebas · La version oficial sigue en <a href="/index.html" style="color:#664d03;text-decoration:underline">/index.html</a></div>
+<div class="v2-banner">v2.1 PREVIEW · Preguntas Cinicas AI + Watchlist · La version oficial sigue en <a href="/index.html" style="color:#664d03;text-decoration:underline">/index.html</a></div>
 
 <!-- V2 Tabs -->
 <div class="v2-tabs">
@@ -592,6 +598,7 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
           <th title="Ranking por Revenue Q1 2026 segun NDR Anexo A (congelado hasta Q2).">#</th>
           <th title="Nombre de cuenta segun NDR. Puede diferir del workspace_name del DW (se resuelve por startswith).">Cliente</th>
           <th title="Account Manager responsable en CS.">AM</th>
+          <th style="width:50px" title="Preguntas Cinicas AI generadas por Claude Haiku cada lunes 8:30 AM. 3 preguntas growth-focused para el AM. Click para ver.">&#129302;</th>
           <th title="Pais del cliente. Hoy NULL — pendiente cruzar contra Zoho o silver.workspaces_report.">Pais</th>
           <th style="width:70px" title="Verde ≥8.8 | Amarillo 7.0-8.8 | Rojo <7.0 o sin data.">Estado</th>
           <th class="num" title="Healthscore del workspace segun gold.v_workspace_health (ultimo snapshot diario). Escala 0-10.">Health</th>
@@ -610,12 +617,48 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
         </tr>
       </thead>
       <tbody id="v2HCBody">
-        <tr><td colspan="18" class="v2-empty">Cargando health check...</td></tr>
+        <tr><td colspan="19" class="v2-empty">Cargando health check...</td></tr>
       </tbody>
     </table>
   </div>
 
-  <div class="v2-ops-box">
+  <!-- WATCHLIST: top 10 fuera del Top 30 oficial que ya superan el piso de bookings completados MTD proyectado -->
+  <div class="v2-table-wrap" style="margin-top:24px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <h3 style="margin:0;color:var(--azul-oscuro-900);font-size:15px">Watchlist — Top 10 fuera del Top 30 oficial</h3>
+      <span class="v2-pill" style="background:#fdba74;color:#7c2d12;border:1px solid #fb923c;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em">Watchlist</span>
+      <span class="v2-sub" id="v2WatchlistSnapshotDate" style="font-size:11px;color:var(--neutral-800)">Snapshot: —</span>
+      <button class="v2-btn v2-btn-sec" style="margin-left:auto;font-size:11px" onclick="v2ToggleWatchlist()" id="v2WatchlistToggle">Ocultar</button>
+    </div>
+    <div id="v2WatchlistContainer">
+    <table class="v2-table" id="v2WatchlistTable">
+      <thead>
+        <tr>
+          <th title="Ranking dinamico por bookings completados MTD proyectados a fin de mes (lineal).">#</th>
+          <th title="Workspace en el DW. Excluye los que ya estan en Top 30 oficial (lista blanca Q vs Q) y rollouts cubiertos.">Cliente</th>
+          <th style="width:50px" title="Preguntas Cinicas AI growth-focused. Generadas lunes 8:30 AM por Claude Haiku.">&#129302;</th>
+          <th>Pais</th>
+          <th class="num" title="COMPLETED bookings del mes en curso (dia 1 hasta hoy).">Comp MTD</th>
+          <th class="num" title="Proyeccion lineal a fin de mes: comp_mtd * dias_mes / dias_transcurridos.">Proj MTD</th>
+          <th class="num" title="Fulfillment rate MTD (completed / total).">%FF MTD</th>
+          <th class="num" title="MRR mensual del workspace, convertido a USD via silver.exchange_rates.">MRR USD</th>
+          <th class="num" title="Health score 0-10 (gold.v_workspace_health, ultimo periodo monthly).">Health</th>
+          <th class="num" title="Churn risk % rolling 12 semanas.">Churn%</th>
+          <th title="Fecha del ultimo booking registrado en el DW.">Ultimo bk</th>
+          <th title="UUID del CS owner asignado en el DW (NULL = sin AM).">CS Owner</th>
+        </tr>
+      </thead>
+      <tbody id="v2WatchlistBody">
+        <tr><td colspan="12" class="v2-empty">Cargando watchlist...</td></tr>
+      </tbody>
+    </table>
+    <div style="font-size:11px;color:var(--neutral-800);margin-top:6px">
+      Sync semanal lunes 8:00 AM (<code>Picker_WatchlistSync</code>). Criterio: MTD proyectado &gt;= piso del Top 30, MRR &gt; 0, no esta en Top 30 ni cubierto por rollouts/multi-sucursal.
+    </div>
+    </div>
+  </div>
+
+  <div class="v2-ops-box" style="margin-top:24px">
     <h3>Operativo 24h — reporte Camilo / Stephanie</h3>
     <div class="v2-ops-row">
       <div>
@@ -628,6 +671,23 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
       </div>
     </div>
     <div style="margin-top:10px;display:flex;justify-content:flex-end"><button class="v2-btn" onclick="v2SaveOpsNotes()">Guardar notas</button> <span id="v2OpsStatus" style="margin-left:10px;font-size:11px;color:var(--neutral-800);align-self:center"></span></div>
+  </div>
+</div>
+
+<!-- V2 Modal: Preguntas Cinicas AI -->
+<div class="v2-modal-bg" id="v2PreguntasModal" onclick="if(event.target===this)v2ClosePreguntasModal()">
+  <div class="v2-modal" style="width:680px;max-width:94vw">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <h3 style="margin:0;flex:1;color:var(--azul-oscuro-900);font-size:16px" id="v2PreguntasTitle">Preguntas Cinicas AI</h3>
+      <button class="v2-btn v2-btn-sec" style="font-size:11px" onclick="v2ClosePreguntasModal()">Cerrar</button>
+    </div>
+    <div id="v2PreguntasMeta" style="font-size:11px;color:var(--neutral-800);margin-bottom:12px"></div>
+    <div id="v2PreguntasBody" style="font-size:13px;line-height:1.6;color:var(--azul-oscuro-900)">
+      <em>Cargando...</em>
+    </div>
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--neutral-200);font-size:10px;color:var(--neutral-800)">
+      Generado por Claude Haiku 4.5 cada lunes 8:30 AM. Tono cinico intencional — el AM responde con datos, no con excusas.
+    </div>
   </div>
 </div>
 

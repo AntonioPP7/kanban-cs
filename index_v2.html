@@ -353,6 +353,12 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
 
 /* v2.2: Dash cell con warning (Costo Opp MTD sin data) */
 .v2-dash-warn { color:#cbd5e0; font-style:italic; }
+
+/* v2.3: Hub deep-link styling */
+.v2-hub-link { color:inherit; text-decoration:none; border-bottom:1px dotted var(--celeste-500); cursor:pointer; }
+.v2-hub-link:hover { color:var(--celeste-500); border-bottom-style:solid; }
+.v2-hub-link::after { content:' ↗'; font-size:9px; opacity:.5; }
+.v2-hub-link:hover::after { opacity:1; }
 </style>
 </head>
 <body>
@@ -368,7 +374,7 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
 <div class="error-banner" id="errorBanner"></div>
 
 <!-- V2 Banner -->
-<div class="v2-banner">v2.2 PREVIEW · Engagement + Trends + Churn + Sort · La version oficial sigue en <a href="/index.html" style="color:#664d03;text-decoration:underline">/index.html</a></div>
+<div class="v2-banner">v2.3 PREVIEW · Hub deep-links + pais 2-letras · La version oficial sigue en <a href="/index.html" style="color:#664d03;text-decoration:underline">/index.html</a></div>
 
 <!-- V2 Tabs -->
 <div class="v2-tabs">

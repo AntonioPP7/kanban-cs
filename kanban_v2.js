@@ -27,6 +27,14 @@ function v2SaveSort() {
   try { localStorage.setItem('v2hc.sort', JSON.stringify(v2HCSort)); } catch (e) { /* ignore */ }
 }
 
+// v2.3: deep-link al workspace en Picker Hub (abre nueva tab)
+const V2_HUB_BASE = 'https://picker-hub.vercel.app/workspaces/';
+function v2HubLink(uuid, label, extraStyle) {
+  if (!uuid) return v2Esc(label);  // sin uuid -> texto plano
+  const style = extraStyle ? (' style="' + extraStyle + '"') : '';
+  return '<a class="v2-hub-link" href="' + V2_HUB_BASE + v2Esc(uuid) + '" target="_blank" rel="noopener"' + style + '>' + v2Esc(label) + '</a>';
+}
+
 function v2Esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -483,14 +491,18 @@ function v2RenderHealthCheck() {
       ? '<button class="v2-ai-btn" title="Ver preguntas cinicas AI" onclick="v2OpenPreguntasModal(\'top30\',\'' + v2Esc(r.id) + '\')">&#129302;</button>'
       : '<span class="v2-ai-btn-empty" title="Aun no generadas (proximo lunes 8:30 AM)">&#129302;</span>';
     const churnPrefix = churnBadge(r.churn_status);
+    const wsName = churnPrefix + (r.workspace_uuid ? v2HubLink(r.workspace_uuid, r.workspace_name) : v2Esc(r.workspace_name));
+    const hsCell = r.workspace_uuid
+      ? v2HubLink(r.workspace_uuid, hs, hsColor + ';font-weight:700')
+      : '<span style="' + hsColor + ';font-weight:700">' + hs + '</span>';
     return '<tr>' +
       '<td>' + (r.rank || '—') + '</td>' +
-      '<td class="v2-cliente">' + churnPrefix + v2Esc(r.workspace_name) + '<small>' + v2Esc(r.workspace_id || '') + '</small></td>' +
+      '<td class="v2-cliente">' + wsName + '<small>' + v2Esc(r.workspace_id || '') + '</small></td>' +
       '<td>' + v2Esc(r.am_owner || '—') + '</td>' +
       '<td class="v2-ai-cell">' + aiBtn + '</td>' +
       '<td>' + v2Esc(r.pais || '—') + '</td>' +
       '<td><span class="v2-sem v2-sem-' + v2Esc(sem) + '"></span>' + v2Esc(sem) + '</td>' +
-      '<td class="num" style="' + hsColor + ';font-weight:700">' + hs + ' ' + fmtTrend(r.healthscore_delta_pp) + '</td>' +
+      '<td class="num">' + hsCell + ' ' + fmtTrend(r.healthscore_delta_pp) + '</td>' +
       '<td class="num" style="' + engColor + ';font-weight:700">' + eng + ' ' + fmtTrend(r.engagement_delta_pp) + '</td>' +
       '<td>' + (r.alertas_abiertas || 0) + (r.alertas_criticas ? ' <span class="v2-pill v2-pill-rojo">' + r.alertas_criticas + '</span>' : '') + '</td>' +
       '<td class="num">' + mtd + '</td>' +
@@ -594,16 +606,22 @@ function v2RenderWatchlist() {
     const hsColor = r.health_score == null ? '' : (r.health_score < 6.5 ? 'color:var(--rojo)' : r.health_score < 7.5 ? 'color:var(--amarillo)' : 'color:var(--verde-500)');
     const churnColor = r.churn_risk_pct == null ? '' : (Number(r.churn_risk_pct) >= 50 ? 'color:var(--rojo);font-weight:700' : Number(r.churn_risk_pct) >= 20 ? 'color:var(--amarillo);font-weight:700' : '');
     const ownerShort = r.workspace_cs_owner_id ? v2Esc(r.workspace_cs_owner_id.substring(0, 8)) + '…' : '<span style="color:var(--rojo)">sin AM</span>';
+    // Watchlist: workspace_id ES el UUID (lo guarda directamente sync_watchlist.py)
+    const wsName = r.workspace_id ? v2HubLink(r.workspace_id, r.workspace_name) : v2Esc(r.workspace_name);
+    const hsLabel = r.health_score == null ? '—' : Number(r.health_score).toFixed(1);
+    const hsCell = r.workspace_id
+      ? v2HubLink(r.workspace_id, hsLabel, hsColor + ';font-weight:700')
+      : '<span style="' + hsColor + ';font-weight:700">' + hsLabel + '</span>';
     return '<tr>' +
       '<td>' + (r.rank || '—') + '</td>' +
-      '<td class="v2-cliente">' + v2Esc(r.workspace_name) + '<small>' + v2Esc(r.workspace_id || '') + '</small></td>' +
+      '<td class="v2-cliente">' + wsName + '<small>' + v2Esc(r.workspace_id || '') + '</small></td>' +
       '<td class="v2-ai-cell">' + aiBtn + '</td>' +
       '<td>' + v2Esc(r.pais || '—') + '</td>' +
       '<td class="num">' + (r.comp_mtd != null ? Number(r.comp_mtd).toLocaleString('en-US') : '—') + '</td>' +
       '<td class="num" style="font-weight:700">' + (r.proj_mtd != null ? Number(r.proj_mtd).toLocaleString('en-US') : '—') + '</td>' +
       '<td class="num">' + fmtPct(r.ff_pct, 1) + '</td>' +
       '<td class="num">' + fmtUsd(r.mrr_usd) + '</td>' +
-      '<td class="num" style="' + hsColor + ';font-weight:700">' + (r.health_score == null ? '—' : Number(r.health_score).toFixed(1)) + '</td>' +
+      '<td class="num">' + hsCell + '</td>' +
       '<td class="num" style="' + churnColor + '">' + fmtPct(r.churn_risk_pct, 0) + '</td>' +
       '<td>' + v2Esc(r.last_booking_date || '—') + '</td>' +
       '<td><small style="font-family:monospace;font-size:10px">' + ownerShort + '</small></td>' +
@@ -703,9 +721,10 @@ function v2RenderChurnSection() {
   const html = churned.map(r => {
     const statusLabel = { pre_churn:'Pre-churn', churned:'Churned', recovered:'Recovered' }[r.churn_status] || r.churn_status;
     const statusClass = { pre_churn:'pre', churned:'', recovered:'recovered' }[r.churn_status] || '';
+    const wsName = r.workspace_uuid ? v2HubLink(r.workspace_uuid, r.workspace_name) : v2Esc(r.workspace_name);
     return '<tr>' +
       '<td>' + (r.rank || '—') + '</td>' +
-      '<td class="v2-cliente">' + v2Esc(r.workspace_name) + '</td>' +
+      '<td class="v2-cliente">' + wsName + '</td>' +
       '<td><span class="v2-churn-badge ' + statusClass + '">' + v2Esc(statusLabel) + '</span></td>' +
       '<td><small>' + v2Esc(r.churn_status_note || '—') + '</small></td>' +
       '<td><small>' + v2Esc(fmtDate(r.churn_status_updated_at)) + '</small></td>' +

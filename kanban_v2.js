@@ -11,6 +11,22 @@ let v2Watchlist = [];
 let v2WatchlistSnapshotDate = null;
 let v2Loaded = { rollouts: false, hc: false };
 
+// v2.2: Sort state, persisted en localStorage
+let v2HCSort = (function() {
+  try {
+    const raw = localStorage.getItem('v2hc.sort');
+    if (raw) {
+      const p = JSON.parse(raw);
+      if (p && p.key) return { key: p.key, dir: p.dir === 'asc' ? 'asc' : 'desc' };
+    }
+  } catch (e) { /* ignore */ }
+  return { key: 'rank', dir: 'asc' };
+})();
+
+function v2SaveSort() {
+  try { localStorage.setItem('v2hc.sort', JSON.stringify(v2HCSort)); } catch (e) { /* ignore */ }
+}
+
 function v2Esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -294,10 +310,57 @@ async function v2LoadHealthCheck() {
   }
 }
 
+function v2SortRows(rows, key, dir) {
+  if (!key) return rows;
+  const sign = dir === 'asc' ? 1 : -1;
+  const isNumKey = ['rank','healthscore','engagement_score','alertas_abiertas','rides_mtd','rides_ytd','rides_sem_ant','delta_semana_ant_pct','delta_12sem_pct','fr_sem_actual_pct','costo_opp_mtd_pct','costo_opp_ytd_pct','take_rate_mtd_pct','take_rate_ytd_pct'].includes(key);
+  return rows.slice().sort((a, b) => {
+    let va = a[key], vb = b[key];
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;   // nulls al fondo siempre
+    if (vb == null) return -1;
+    if (isNumKey) {
+      return sign * (Number(va) - Number(vb));
+    }
+    return sign * String(va).localeCompare(String(vb), 'es');
+  });
+}
+
+function v2UpdateSortIndicators() {
+  document.querySelectorAll('#v2HCTable thead th.v2-sortable').forEach(th => {
+    th.classList.remove('sort-asc', 'sort-desc');
+    if (th.dataset.sortKey === v2HCSort.key) {
+      th.classList.add('sort-' + v2HCSort.dir);
+    }
+  });
+}
+
+function v2OnSortClick(key) {
+  if (v2HCSort.key === key) {
+    v2HCSort.dir = v2HCSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    v2HCSort.key = key;
+    v2HCSort.dir = 'desc';  // default desc para metricas (rank toggle a asc despues)
+  }
+  v2SaveSort();
+  v2RenderHealthCheck();
+}
+
+function v2WireSortHandlers() {
+  document.querySelectorAll('#v2HCTable thead th.v2-sortable').forEach(th => {
+    if (th.dataset.sortWired) return;
+    th.dataset.sortWired = '1';
+    th.addEventListener('click', () => v2OnSortClick(th.dataset.sortKey));
+  });
+}
+
 function v2RenderHealthCheck() {
+  v2WireSortHandlers();
+  v2UpdateSortIndicators();
   const fAM = document.getElementById('v2FilterHCAM').value;
   const fSem = document.getElementById('v2FilterHCSem').value;
-  const rows = v2HealthCheck.filter(r => (!fAM || r.am_owner === fAM) && (!fSem || r.semaforo === fSem));
+  let rows = v2HealthCheck.filter(r => (!fAM || r.am_owner === fAM) && (!fSem || r.semaforo === fSem));
+  rows = v2SortRows(rows, v2HCSort.key, v2HCSort.dir);
 
   document.getElementById('v2KpiTotal').textContent = v2HealthCheck.length;
   const alertas = v2HealthCheck.reduce((a, r) => a + (r.alertas_abiertas || 0), 0);
@@ -312,7 +375,7 @@ function v2RenderHealthCheck() {
 
   const body = document.getElementById('v2HCBody');
   if (!rows.length) {
-    v2SetHTML(body, '<tr><td colspan="18" class="v2-empty">Sin resultados con esos filtros.</td></tr>');
+    v2SetHTML(body, '<tr><td colspan="20" class="v2-empty">Sin resultados con esos filtros.</td></tr>');
     return;
   }
   // Actualizar headers con numero de semana ISO (lo toma del primer row con data)
@@ -349,15 +412,44 @@ function v2RenderHealthCheck() {
       : n <= -1 ? 'color:var(--amarillo)' : '';
     return { txt, style };
   };
-  // Costo oportunidad: % penalidades sobre billing. Menor = mejor.
-  const fmtCostoOpp = (v) => {
+  // Costo oportunidad MTD: si la fuente cfo no consolido el mes (~0), mostrar — con warning.
+  // Detectamos esta condicion comparando MTD vs YTD: si YTD > 0 pero MTD < 0.05% (efectivamente cero),
+  // asumimos que es bug de fuente y no realmente "0% costo opp".
+  const fmtCostoOpp = (v, isMtd, ytdRef) => {
     if (v == null) return { txt:'—', style:'' };
     const n = Number(v);
+    // Dash con warning si MTD ~= 0 y YTD tiene data
+    if (isMtd && Math.abs(n) < 0.05 && ytdRef != null && Math.abs(Number(ytdRef)) > 0.1) {
+      return {
+        txt: '<span class="v2-dash-warn v2-tooltip" data-tooltip="cfo.base_maestra_mat aun no consolida costos del mes en curso (suele cerrarse alrededor del dia 10 del mes siguiente). El sync mostrara el dato cuando Armando termine el proceso.">⚠ —</span>',
+        style: ''
+      };
+    }
     const txt = n.toFixed(1) + '%';
     const style = n >= 5 ? 'style="color:var(--rojo);font-weight:700"'
       : n >= 2 ? 'style="color:var(--amarillo);font-weight:700"'
       : 'style="color:var(--verde-500);font-weight:600"';
     return { txt, style };
+  };
+
+  // Trend arrow: avg 7d vs 7dp en puntos del score.
+  const fmtTrend = (delta) => {
+    if (delta == null) return '<span class="v2-trend v2-trend-na" title="Necesita 14 dias de historia">—</span>';
+    const n = Number(delta);
+    if (Math.abs(n) < 0.05) return '<span class="v2-trend v2-trend-flat" title="Sin cambio significativo (<0.05)">→</span>';
+    const arrow = n > 0 ? '↑' : '↓';
+    const cls = n > 0 ? 'v2-trend-up' : 'v2-trend-down';
+    const sign = n > 0 ? '+' : '';
+    return '<span class="v2-trend ' + cls + '" title="vs avg 7 dias previos">' + arrow + sign + n.toFixed(1) + '</span>';
+  };
+
+  // Churn badge: prefix antes del nombre cuando churn_status != null
+  const churnBadge = (status) => {
+    if (!status) return '';
+    const map = { churned: { cls:'', txt:'CHURN' }, pre_churn: { cls:' pre', txt:'PRE-CHURN' }, recovered: { cls:' recovered', txt:'RECOVERED' } };
+    const m = map[status];
+    if (!m) return '';
+    return '<span class="v2-churn-badge' + m.cls + '">' + m.txt + '</span>';
   };
   // Take rate: % billing / order value. No hay umbrales de bueno/malo, solo informativo.
   const fmtTakeRate = (v, cov) => {
@@ -377,25 +469,29 @@ function v2RenderHealthCheck() {
     const ridesSemAnt = r.rides_sem_ant != null ? Number(r.rides_sem_ant).toLocaleString('en-US') : '—';
     const frActual = r.fr_sem_actual_pct != null ? Number(r.fr_sem_actual_pct).toFixed(1) + '%' : '—';
     const frVar = fmtFrVar(r.fr_variation_pp);
-    const coppMtd = fmtCostoOpp(r.costo_opp_mtd_pct);
-    const coppYtd = fmtCostoOpp(r.costo_opp_ytd_pct);
+    const coppMtd = fmtCostoOpp(r.costo_opp_mtd_pct, true, r.costo_opp_ytd_pct);
+    const coppYtd = fmtCostoOpp(r.costo_opp_ytd_pct, false, null);
     const trMtd = fmtTakeRate(r.take_rate_mtd_pct, r.orden_coverage_mtd_pct);
     const trYtd = fmtTakeRate(r.take_rate_ytd_pct, r.orden_coverage_ytd_pct);
     const hs = r.healthscore == null ? '—' : Number(r.healthscore).toFixed(1);
     const hsColor = r.healthscore == null ? '' : (r.healthscore < 6.5 ? 'color:var(--rojo)' : r.healthscore < 7.5 ? 'color:var(--amarillo)' : 'color:var(--verde-500)');
+    const eng = r.engagement_score == null ? '—' : Number(r.engagement_score).toFixed(1);
+    const engColor = r.engagement_score == null ? '' : (r.engagement_score < 6.5 ? 'color:var(--rojo)' : r.engagement_score < 8.0 ? 'color:var(--amarillo)' : 'color:var(--verde-500)');
     const safeId = v2Esc(r.id);
     const sem = r.semaforo || 'verde';
     const aiBtn = r.preguntas_ai
       ? '<button class="v2-ai-btn" title="Ver preguntas cinicas AI" onclick="v2OpenPreguntasModal(\'top30\',\'' + v2Esc(r.id) + '\')">&#129302;</button>'
       : '<span class="v2-ai-btn-empty" title="Aun no generadas (proximo lunes 8:30 AM)">&#129302;</span>';
+    const churnPrefix = churnBadge(r.churn_status);
     return '<tr>' +
       '<td>' + (r.rank || '—') + '</td>' +
-      '<td class="v2-cliente">' + v2Esc(r.workspace_name) + '<small>' + v2Esc(r.workspace_id || '') + '</small></td>' +
+      '<td class="v2-cliente">' + churnPrefix + v2Esc(r.workspace_name) + '<small>' + v2Esc(r.workspace_id || '') + '</small></td>' +
       '<td>' + v2Esc(r.am_owner || '—') + '</td>' +
       '<td class="v2-ai-cell">' + aiBtn + '</td>' +
       '<td>' + v2Esc(r.pais || '—') + '</td>' +
       '<td><span class="v2-sem v2-sem-' + v2Esc(sem) + '"></span>' + v2Esc(sem) + '</td>' +
-      '<td class="num" style="' + hsColor + ';font-weight:700">' + hs + '</td>' +
+      '<td class="num" style="' + hsColor + ';font-weight:700">' + hs + ' ' + fmtTrend(r.healthscore_delta_pp) + '</td>' +
+      '<td class="num" style="' + engColor + ';font-weight:700">' + eng + ' ' + fmtTrend(r.engagement_delta_pp) + '</td>' +
       '<td>' + (r.alertas_abiertas || 0) + (r.alertas_criticas ? ' <span class="v2-pill v2-pill-rojo">' + r.alertas_criticas + '</span>' : '') + '</td>' +
       '<td class="num">' + mtd + '</td>' +
       '<td class="num">' + ytd + '</td>' +
@@ -411,6 +507,7 @@ function v2RenderHealthCheck() {
       '</tr>';
   }).join('');
   v2SetHTML(body, html);
+  v2RenderChurnSection();
 }
 
 async function v2LoadOpsNotes() {
@@ -580,4 +677,50 @@ function v2OpenPreguntasModal(kind, rowId) {
 
 function v2ClosePreguntasModal() {
   document.getElementById('v2PreguntasModal').classList.remove('open');
+}
+
+// ============================================================
+// CHURN / PRE-CHURN section (debajo del Watchlist)
+// Renderiza las cuentas Top 30 con churn_status != null
+// ============================================================
+
+function v2RenderChurnSection() {
+  const body = document.getElementById('v2ChurnBody');
+  if (!body) return;
+  const churned = v2HealthCheck.filter(r => r.churn_status);
+  document.getElementById('v2ChurnCount').textContent = churned.length + ' cuenta' + (churned.length === 1 ? '' : 's') + ' marcada' + (churned.length === 1 ? '' : 's');
+  if (!churned.length) {
+    v2SetHTML(body, '<tr><td colspan="9" class="v2-empty">Sin cuentas marcadas. Para etiquetar, edita churn_status en el modal de cada card del Top 30.</td></tr>');
+    return;
+  }
+  const order = { pre_churn: 0, churned: 1, recovered: 2 };
+  churned.sort((a, b) => (order[a.churn_status] ?? 9) - (order[b.churn_status] ?? 9));
+  const fmtDate = (iso) => {
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleDateString('es-EC', { day:'2-digit', month:'short', year:'2-digit' }); }
+    catch (e) { return iso.substring(0, 10); }
+  };
+  const html = churned.map(r => {
+    const statusLabel = { pre_churn:'Pre-churn', churned:'Churned', recovered:'Recovered' }[r.churn_status] || r.churn_status;
+    const statusClass = { pre_churn:'pre', churned:'', recovered:'recovered' }[r.churn_status] || '';
+    return '<tr>' +
+      '<td>' + (r.rank || '—') + '</td>' +
+      '<td class="v2-cliente">' + v2Esc(r.workspace_name) + '</td>' +
+      '<td><span class="v2-churn-badge ' + statusClass + '">' + v2Esc(statusLabel) + '</span></td>' +
+      '<td><small>' + v2Esc(r.churn_status_note || '—') + '</small></td>' +
+      '<td><small>' + v2Esc(fmtDate(r.churn_status_updated_at)) + '</small></td>' +
+      '<td>' + v2Esc(r.am_owner || '—') + '</td>' +
+      '<td class="num">' + (r.healthscore == null ? '—' : Number(r.healthscore).toFixed(1)) + '</td>' +
+      '<td class="num">' + (r.engagement_score == null ? '—' : Number(r.engagement_score).toFixed(1)) + '</td>' +
+      '<td class="num">' + (r.rides_mtd != null ? Number(r.rides_mtd).toLocaleString('en-US') : '—') + '</td>' +
+      '</tr>';
+  }).join('');
+  v2SetHTML(body, html);
+}
+
+function v2ToggleChurn() {
+  const c = document.getElementById('v2ChurnContainer');
+  const btn = document.getElementById('v2ChurnToggle');
+  if (c.style.display === 'none') { c.style.display = ''; btn.textContent = 'Ocultar'; }
+  else { c.style.display = 'none'; btn.textContent = 'Mostrar'; }
 }

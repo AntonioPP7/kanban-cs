@@ -308,6 +308,51 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
 .v2-ai-btn { background:linear-gradient(135deg,#a78bfa,#8b5cf6); color:#fff; border:none; border-radius:6px; padding:3px 7px; font-size:14px; cursor:pointer; transition:transform .1s, box-shadow .1s; line-height:1; }
 .v2-ai-btn:hover { transform:scale(1.1); box-shadow:0 2px 6px rgba(139,92,246,.4); }
 .v2-ai-btn-empty { color:#cbd5e0; font-size:14px; cursor:not-allowed; opacity:.5; }
+
+/* v2.2: Custom tooltip (reemplaza title nativo) - aparece en 200ms, estilo Picker */
+.v2-tooltip { position:relative; cursor:help; }
+.v2-tooltip::after {
+  content: attr(data-tooltip);
+  position:absolute; top:calc(100% + 6px); left:50%; transform:translateX(-50%) translateY(-4px);
+  background:var(--azul-oscuro-900); color:#fff;
+  padding:8px 12px; border-radius:6px; font-size:11px; font-weight:400; line-height:1.45;
+  white-space:normal; min-width:200px; max-width:340px; width:max-content; text-align:left;
+  box-shadow:0 4px 12px rgba(17,31,70,.3); text-transform:none; letter-spacing:.01em;
+  opacity:0; pointer-events:none; transition:opacity .15s ease-out .2s, transform .15s ease-out .2s;
+  z-index:50;
+}
+.v2-tooltip::before {
+  content:''; position:absolute; top:calc(100% + 1px); left:50%; transform:translateX(-50%) translateY(-4px);
+  border:5px solid transparent; border-bottom-color:var(--azul-oscuro-900);
+  opacity:0; transition:opacity .15s ease-out .2s, transform .15s ease-out .2s; z-index:51;
+}
+.v2-tooltip:hover::after, .v2-tooltip:hover::before { opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; }
+
+/* v2.2: Sort indicator en headers */
+.v2-sortable { cursor:pointer; user-select:none; }
+.v2-sortable:hover { background:#eef2f7 !important; }
+.v2-sort-indicator { display:inline-block; margin-left:4px; font-size:9px; color:var(--neutral-800); opacity:.5; }
+.v2-sortable.sort-asc .v2-sort-indicator,
+.v2-sortable.sort-desc .v2-sort-indicator { color:var(--azul-oscuro-900); opacity:1; }
+.v2-sortable.sort-asc .v2-sort-indicator::after { content:' ▲'; }
+.v2-sortable.sort-desc .v2-sort-indicator::after { content:' ▼'; }
+.v2-sortable:not(.sort-asc):not(.sort-desc) .v2-sort-indicator::after { content:' ⇅'; }
+
+/* v2.2: Trend arrows dentro de score cells */
+.v2-trend { display:inline-block; margin-left:5px; font-size:10px; font-weight:600; }
+.v2-trend-up { color:var(--verde-500); }
+.v2-trend-down { color:var(--rojo); }
+.v2-trend-flat { color:var(--neutral-800); }
+.v2-trend-na { color:#cbd5e0; font-style:italic; font-weight:400; }
+
+/* v2.2: Churn badge */
+.v2-churn-badge { display:inline-block; background:#dc2626; color:#fff; font-size:9px; font-weight:700;
+  padding:2px 6px; border-radius:10px; margin-right:6px; text-transform:uppercase; letter-spacing:.04em; }
+.v2-churn-badge.pre { background:#f59e0b; color:#fff; }
+.v2-churn-badge.recovered { background:#10b981; color:#fff; }
+
+/* v2.2: Dash cell con warning (Costo Opp MTD sin data) */
+.v2-dash-warn { color:#cbd5e0; font-style:italic; }
 </style>
 </head>
 <body>
@@ -323,7 +368,7 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
 <div class="error-banner" id="errorBanner"></div>
 
 <!-- V2 Banner -->
-<div class="v2-banner">v2.1 PREVIEW · Preguntas Cinicas AI + Watchlist · La version oficial sigue en <a href="/index.html" style="color:#664d03;text-decoration:underline">/index.html</a></div>
+<div class="v2-banner">v2.2 PREVIEW · Engagement + Trends + Churn + Sort · La version oficial sigue en <a href="/index.html" style="color:#664d03;text-decoration:underline">/index.html</a></div>
 
 <!-- V2 Tabs -->
 <div class="v2-tabs">
@@ -595,29 +640,30 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
     <table class="v2-table" id="v2HCTable">
       <thead>
         <tr>
-          <th title="Ranking por Revenue Q1 2026 segun NDR Anexo A (congelado hasta Q2).">#</th>
-          <th title="Nombre de cuenta segun NDR. Puede diferir del workspace_name del DW (se resuelve por startswith).">Cliente</th>
-          <th title="Account Manager responsable en CS.">AM</th>
-          <th style="width:50px" title="Preguntas Cinicas AI generadas por Claude Haiku cada lunes 8:30 AM. 3 preguntas growth-focused para el AM. Click para ver.">&#129302;</th>
-          <th title="Pais del cliente. Hoy NULL — pendiente cruzar contra Zoho o silver.workspaces_report.">Pais</th>
-          <th style="width:70px" title="Verde ≥8.8 | Amarillo 7.0-8.8 | Rojo <7.0 o sin data.">Estado</th>
-          <th class="num" title="Healthscore del workspace segun gold.v_workspace_health (ultimo snapshot diario). Escala 0-10.">Health</th>
-          <th title="Alertas abiertas (status active + in_progress). Las criticas se resaltan (severity=critical).">Alertas</th>
-          <th class="num" title="Completed rides del mes en curso (dia 1 hasta hoy).">Rides MTD</th>
-          <th class="num" title="Completed rides del anio en curso (1 ene hasta hoy).">Rides YTD</th>
-          <th class="num" id="v2HCRidesSemAntHeader" title="Completed rides de la semana anterior cerrada (lun-dom ISO).">Rides sem ant</th>
-          <th class="num" title="Variacion % de rides: semana actual WTD proyectada a 7d vs semana anterior completa (lun-dom ISO).">Δ sem actual <small style="font-weight:400;text-transform:none">(proy)</small></th>
-          <th class="num" title="Variacion % de rides: semana anterior completa vs promedio de las 12 semanas previas a ella.">Δ 12s <small style="font-weight:400;text-transform:none">(sem ant)</small></th>
-          <th class="num" id="v2HCFrActualHeader" title="Fulfillment rate de la semana en curso WTD (completed / total bookings), con variacion en puntos porcentuales vs %FR de la semana anterior cerrada.">%FR sem actual</th>
-          <th class="num" title="Costo de oportunidad MTD: % del billing Picker (revenue_usd) que se absorbe en penalidades operativas (costo_cancelacion + costo_retorno + costo_wt). Fuente: cfo.base_maestra_mat. Mes en curso.">Costo Opp MTD</th>
-          <th class="num" title="Costo de oportunidad YTD: % del billing Picker (revenue_usd) que se absorbe en penalidades operativas (costo_cancelacion + costo_retorno + costo_wt). Fuente: cfo.base_maestra_mat. Anio en curso.">Costo Opp YTD</th>
-          <th class="num" title="Take rate MTD: SUM(billing Picker) / SUM(order value del cliente). Solo bookings con orden>0, en USD. Muestra '—' si cobertura de orden <20% (cliente no reporta valor del pedido). Fuente: cfo.base_maestra_mat.">Take Rate MTD</th>
-          <th class="num" title="Take rate YTD: SUM(billing Picker) / SUM(order value del cliente). Solo bookings con orden>0, en USD. Muestra '—' si cobertura de orden <20%. Fuente: cfo.base_maestra_mat.">Take Rate YTD</th>
-          <th title="Campo libre del AM. Se guardara como bitacora con timestamp (pendiente implementar).">Comentario ejecutivo</th>
+          <th class="v2-tooltip v2-sortable" data-sort-key="rank" data-tooltip="Ranking por Revenue Q1 2026 segun NDR Anexo A (congelado hasta Q2 - lista blanca de retencion/expansion).">#<span class="v2-sort-indicator"></span></th>
+          <th class="v2-tooltip v2-sortable" data-sort-key="workspace_name" data-tooltip="Nombre de cuenta segun NDR. Badge CHURN/PRE-CHURN aparece cuando se marca manualmente desde el modal de edicion.">Cliente<span class="v2-sort-indicator"></span></th>
+          <th class="v2-tooltip v2-sortable" data-sort-key="am_owner" data-tooltip="Account Manager responsable en CS.">AM<span class="v2-sort-indicator"></span></th>
+          <th style="width:50px" class="v2-tooltip" data-tooltip="Preguntas Cinicas AI generadas por Claude Haiku cada lunes 8:30 AM. 3 preguntas growth-focused para el AM. Click para abrir modal.">&#129302;</th>
+          <th class="v2-tooltip v2-sortable" data-sort-key="pais" data-tooltip="Pais del cliente. Inferido por currency en silver.tsr (MXN->MX, COP->CO, etc).">Pais<span class="v2-sort-indicator"></span></th>
+          <th style="width:70px" class="v2-tooltip v2-sortable" data-sort-key="semaforo" data-tooltip="Verde >=8.8 | Amarillo 7.0-8.8 | Rojo <7.0 o sin data. Basado en healthscore.">Estado<span class="v2-sort-indicator"></span></th>
+          <th class="num v2-tooltip v2-sortable" data-sort-key="healthscore" data-tooltip="Healthscore (0-10) ultimo snapshot. Trend = avg ultimos 7 dias vs avg 7 dias previos. Fuente: gold.v_workspace_health.">Health<span class="v2-sort-indicator"></span></th>
+          <th class="num v2-tooltip v2-sortable" data-sort-key="engagement_score" data-tooltip="Engagement Score (0-10) de Picker Hub (public.workspaces.latest_engagement). Mide adopcion de funcionalidades. Trend = avg 7d vs 7d previos (acumula desde 22-may-2026).">Engagement<span class="v2-sort-indicator"></span></th>
+          <th class="v2-tooltip v2-sortable" data-sort-key="alertas_abiertas" data-tooltip="Alertas abiertas (status active + in_progress). Las criticas se resaltan en rojo (severity=critical).">Alertas<span class="v2-sort-indicator"></span></th>
+          <th class="num v2-tooltip v2-sortable" data-sort-key="rides_mtd" data-tooltip="Completed rides del mes en curso (dia 1 hasta hoy). Fuente: gold.v_booking_detail.">Rides MTD<span class="v2-sort-indicator"></span></th>
+          <th class="num v2-tooltip v2-sortable" data-sort-key="rides_ytd" data-tooltip="Completed rides del anio en curso (1 ene hasta hoy).">Rides YTD<span class="v2-sort-indicator"></span></th>
+          <th class="num v2-tooltip v2-sortable" data-sort-key="rides_sem_ant" id="v2HCRidesSemAntHeader" data-tooltip="Completed rides de la semana anterior cerrada (lun-dom ISO).">Rides sem ant<span class="v2-sort-indicator"></span></th>
+          <th class="num v2-tooltip v2-sortable" data-sort-key="delta_semana_ant_pct" data-tooltip="Variacion % de rides: semana actual WTD proyectada a 7d vs semana anterior completa (lun-dom ISO).">Δ sem actual <small style="font-weight:400;text-transform:none">(proy)</small><span class="v2-sort-indicator"></span></th>
+          <th class="num v2-tooltip v2-sortable" data-sort-key="delta_12sem_pct" data-tooltip="Variacion % de rides: semana anterior completa vs promedio de las 12 semanas previas a ella.">Δ 12s <small style="font-weight:400;text-transform:none">(sem ant)</small><span class="v2-sort-indicator"></span></th>
+          <th class="num v2-tooltip v2-sortable" data-sort-key="fr_sem_actual_pct" id="v2HCFrActualHeader" data-tooltip="Fulfillment rate de la semana en curso WTD (completed / total bookings), con variacion en puntos porcentuales vs %FR de la semana anterior cerrada.">%FR sem actual<span class="v2-sort-indicator"></span></th>
+          <th class="num v2-tooltip v2-sortable" data-sort-key="costo_opp_mtd_pct" data-tooltip="Costo oportunidad MTD: % del billing Picker absorbido en penalidades (costo_cancelacion + costo_retorno + costo_wt). Fuente: cfo.base_maestra_mat. Si la fuente no ha consolidado el mes, se muestra ⚠️.">Costo Opp MTD<span class="v2-sort-indicator"></span></th>
+          <th class="num v2-tooltip v2-sortable" data-sort-key="costo_opp_ytd_pct" data-tooltip="Costo oportunidad YTD: % del billing Picker absorbido en penalidades. Fuente: cfo.base_maestra_mat. Anio en curso.">Costo Opp YTD<span class="v2-sort-indicator"></span></th>
+          <th class="num v2-tooltip v2-sortable" data-sort-key="take_rate_mtd_pct" data-tooltip="Take rate MTD: SUM(billing Picker) / SUM(order value del cliente). Solo bookings con orden>0, en USD. Muestra '—' si cobertura de orden <20%.">Take Rate MTD<span class="v2-sort-indicator"></span></th>
+          <th class="num v2-tooltip v2-sortable" data-sort-key="take_rate_ytd_pct" data-tooltip="Take rate YTD: SUM(billing Picker) / SUM(order value del cliente). Solo bookings con orden>0, en USD.">Take Rate YTD<span class="v2-sort-indicator"></span></th>
+          <th class="v2-tooltip" data-tooltip="Campo libre del AM. Se guarda inline al hacer blur.">Comentario ejecutivo</th>
         </tr>
       </thead>
       <tbody id="v2HCBody">
-        <tr><td colspan="19" class="v2-empty">Cargando health check...</td></tr>
+        <tr><td colspan="20" class="v2-empty">Cargando health check...</td></tr>
       </tbody>
     </table>
   </div>
@@ -655,6 +701,36 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
     <div style="font-size:11px;color:var(--neutral-800);margin-top:6px">
       Sync semanal lunes 8:00 AM (<code>Picker_WatchlistSync</code>). Criterio: MTD proyectado &gt;= piso del Top 30, MRR &gt; 0, no esta en Top 30 ni cubierto por rollouts/multi-sucursal.
     </div>
+    </div>
+  </div>
+
+  <!-- CHURN / PRE-CHURN: cuentas Top 30 marcadas manualmente como en riesgo o perdidas -->
+  <div class="v2-table-wrap" style="margin-top:24px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <h3 style="margin:0;color:var(--azul-oscuro-900);font-size:15px">Cuentas Churn / Pre-Churn</h3>
+      <span class="v2-pill" style="background:#fecaca;color:#7f1d1d;border:1px solid #dc2626;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em">Riesgo</span>
+      <span class="v2-sub" id="v2ChurnCount" style="font-size:11px;color:var(--neutral-800)">0 cuentas marcadas</span>
+      <button class="v2-btn v2-btn-sec" style="margin-left:auto;font-size:11px" onclick="v2ToggleChurn()" id="v2ChurnToggle">Ocultar</button>
+    </div>
+    <div id="v2ChurnContainer">
+    <table class="v2-table" id="v2ChurnTable">
+      <thead>
+        <tr>
+          <th class="v2-tooltip" data-tooltip="Ranking original en el Top 30.">#</th>
+          <th class="v2-tooltip" data-tooltip="Cuenta marcada manualmente como churn / pre-churn / recovered.">Cliente</th>
+          <th class="v2-tooltip" data-tooltip="Estado actual: pre-churn (alerta temprana), churned (perdida), recovered (recuperada).">Estado churn</th>
+          <th class="v2-tooltip" data-tooltip="Razon registrada al marcar.">Razon</th>
+          <th class="v2-tooltip" data-tooltip="Fecha y hora del ultimo cambio de estado.">Actualizado</th>
+          <th class="v2-tooltip" data-tooltip="AM responsable en el Top 30.">AM</th>
+          <th class="num v2-tooltip" data-tooltip="Healthscore actual (referencia).">Health</th>
+          <th class="num v2-tooltip" data-tooltip="Engagement actual.">Eng</th>
+          <th class="num v2-tooltip" data-tooltip="Rides MTD para contexto.">Rides MTD</th>
+        </tr>
+      </thead>
+      <tbody id="v2ChurnBody">
+        <tr><td colspan="9" class="v2-empty">Sin cuentas marcadas. Editar churn_status desde el modal de cada card del Top 30.</td></tr>
+      </tbody>
+    </table>
     </div>
   </div>
 

@@ -560,7 +560,7 @@ async function v2SaveOpsNotes() {
 
 // ============================================================
 // WATCHLIST — Top 10 fuera del Top 30 oficial
-// Sync semanal lunes 8:00 AM (Picker_WatchlistSync). Lectura readonly desde el frontend.
+// Sync diario 8:00 AM (Picker_WatchlistSync). Lectura readonly desde el frontend.
 // ============================================================
 
 async function v2LoadWatchlist() {
@@ -572,7 +572,7 @@ async function v2LoadWatchlist() {
       .limit(1);
     if (e1) throw e1;
     if (!latest || !latest.length) {
-      v2SetHTML(body, '<tr><td colspan="12" class="v2-empty">Sin snapshot aun. El sync watchlist corre lunes 8:00 AM.</td></tr>');
+      v2SetHTML(body, '<tr><td colspan="12" class="v2-empty">Sin snapshot aun. El sync watchlist corre diario 8:00 AM.</td></tr>');
       document.getElementById('v2WatchlistSnapshotDate').textContent = 'Snapshot: sin datos';
       return;
     }

@@ -688,12 +688,12 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
         <tr>
           <th title="Ranking dinamico por bookings completados MTD proyectados a fin de mes (lineal).">#</th>
           <th title="Workspace en el DW. Excluye los que ya estan en Top 30 oficial (lista blanca Q vs Q) y rollouts cubiertos.">Cliente</th>
-          <th style="width:50px" title="Preguntas Cinicas AI growth-focused. Generadas lunes 8:30 AM por Claude Haiku.">&#129302;</th>
+          <th style="width:50px" title="Preguntas Cinicas AI growth-focused. Generadas diariamente por Claude Haiku.">&#129302;</th>
           <th>Pais</th>
           <th class="num" title="COMPLETED bookings del mes en curso (dia 1 hasta hoy).">Comp MTD</th>
           <th class="num" title="Proyeccion lineal a fin de mes: comp_mtd * dias_mes / dias_transcurridos.">Proj MTD</th>
           <th class="num" title="Fulfillment rate MTD (completed / total).">%FF MTD</th>
-          <th class="num" title="MRR mensual del workspace, convertido a USD via silver.exchange_rates.">MRR USD</th>
+          <th class="num" title="Facturacion mensual del workspace en USD (mrr_revenue o, si es usage-based, revenue del mes), via silver.exchange_rates.">Fact./mes USD</th>
           <th class="num" title="Health score 0-10 (gold.v_workspace_health, ultimo periodo monthly).">Health</th>
           <th class="num" title="Churn risk % rolling 12 semanas.">Churn%</th>
           <th title="Fecha del ultimo booking registrado en el DW.">Ultimo bk</th>
@@ -705,7 +705,7 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
       </tbody>
     </table>
     <div style="font-size:11px;color:var(--neutral-800);margin-top:6px">
-      Sync semanal lunes 8:00 AM (<code>Picker_WatchlistSync</code>). Criterio: MTD proyectado &gt;= piso del Top 30, MRR &gt; 0, no esta en Top 30 ni cubierto por rollouts/multi-sucursal.
+      Sync diario 8:00 AM (<code>Picker_WatchlistSync</code>). Criterio: MTD proyectado &gt;= piso del Top 30, facturacion &gt; 0 (mrr o revenue), no esta en Top 30 ni cubierto por rollouts/multi-sucursal.
     </div>
     </div>
   </div>

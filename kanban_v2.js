@@ -389,17 +389,24 @@ function v2RenderHealthCheck() {
   // Actualizar headers con numero de semana ISO (lo toma del primer row con data)
   const sample = v2HealthCheck.find(r => r.semana_ant_num != null || r.semana_actual_num != null);
   if (sample) {
-    const setHeader = (id, label, wk) => {
+    const setHeader = (id, label, wk, suffix, tip) => {
       const el = document.getElementById(id);
       if (!el || wk == null) return;
       el.textContent = label + ' ';
       const small = document.createElement('small');
       small.style.cssText = 'font-weight:400;text-transform:none';
-      small.textContent = '(W' + wk + ')';
+      small.textContent = '(W' + wk + (suffix || '') + ')';
+      if (tip) small.title = tip;
       el.appendChild(small);
     };
     setHeader('v2HCRidesSemAntHeader', 'Rides sem ant', sample.semana_ant_num);
-    setHeader('v2HCFrActualHeader', '%FR sem actual', sample.semana_actual_num);
+    // En fallback (inicio de semana) el %FR actual muestra la ultima semana COMPLETA, no la WTD.
+    const frFallback = sample.fr_fallback === true;
+    setHeader('v2HCFrActualHeader',
+      frFallback ? '%FR sem' : '%FR sem actual',
+      sample.semana_actual_num,
+      frFallback ? ' · cerrada' : '',
+      frFallback ? 'Semana en curso aun sin data suficiente (inicio de semana): se muestra el %FR de la ultima semana COMPLETA. A partir del miercoles vuelve a la semana en curso (WTD).' : 'Fulfillment de la semana en curso (WTD).');
   }
   const fmtDelta = (v) => {
     if (v == null) return { txt:'—', style:'' };

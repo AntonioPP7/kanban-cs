@@ -381,6 +381,9 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
   <div class="v2-tab active" data-v2-tab="ciclo" onclick="v2ShowTab('ciclo')">Ciclo CS</div>
   <div class="v2-tab" data-v2-tab="rollouts" onclick="v2ShowTab('rollouts')">Rollouts <span class="v2-badge" id="v2BadgeRollouts">0</span></div>
   <div class="v2-tab" data-v2-tab="healthcheck" onclick="v2ShowTab('healthcheck')">Health Check <span class="v2-badge">Top 30</span></div>
+  <div class="v2-tab" data-v2-tab="cartera" onclick="v2ShowTab('cartera')">Cartera 2500</div>
+  <div class="v2-tab" data-v2-tab="expansion" onclick="v2ShowTab('expansion')">Expansión <span class="v2-badge">Top 40</span></div>
+  <div class="v2-tab" data-v2-tab="manualidad" onclick="v2ShowTab('manualidad')">Manualidad</div>
 </div>
 
 <!-- V2 View: Ciclo (wraps current kanban) -->
@@ -753,6 +756,110 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
       </div>
     </div>
     <div style="margin-top:10px;display:flex;justify-content:flex-end"><button class="v2-btn" onclick="v2SaveOpsNotes()">Guardar notas</button> <span id="v2OpsStatus" style="margin-left:10px;font-size:11px;color:var(--neutral-800);align-self:center"></span></div>
+  </div>
+</div>
+
+<!-- V2 View: Cartera 2500 -->
+<div id="view-cartera" class="v2-view">
+  <div class="v2-toolbar">
+    <div>
+      <h2>Cartera 2500 — rollouts en rampa</h2>
+      <div class="v2-sub" id="v2CarteraSnapshotDate">Snapshot: —</div>
+    </div>
+  </div>
+  <div class="v2-kpi-row">
+    <div class="v2-kpi"><div class="v2-kpi-label">Mes anterior (cerrado)</div><div class="v2-kpi-value" id="v2CarteraMayo">—</div><div class="v2-kpi-sub">rides baseline</div></div>
+    <div class="v2-kpi"><div class="v2-kpi-label">Proy. cierre mes</div><div class="v2-kpi-value" id="v2CarteraProy">—</div><div class="v2-kpi-sub" id="v2CarteraProySub">—</div></div>
+    <div class="v2-kpi"><div class="v2-kpi-label">Crecimiento proyectado</div><div class="v2-kpi-value" id="v2CarteraCrec">—</div><div class="v2-kpi-sub">objetivo +2,500/mes</div></div>
+    <div class="v2-kpi" id="v2CarteraGapKpi"><div class="v2-kpi-label">Brecha vs objetivo</div><div class="v2-kpi-value" id="v2CarteraGap">—</div><div class="v2-kpi-sub">+2,500 agregado</div></div>
+  </div>
+  <div class="v2-table-wrap">
+    <table class="v2-table" id="v2CarteraTable">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Cuenta</th>
+          <th>País</th>
+          <th class="num v2-tooltip" data-tooltip="Techo de envios/mes del cliente (public.workspace_settings) menos rides Picker del mes anterior = upside por capturar. Abajo, el techo registrado.">Dist. Techo</th>
+          <th class="num">Mes ant</th>
+          <th class="num">MTD</th>
+          <th class="num v2-tooltip" data-tooltip="Numero grande = proy. cierre a ritmo 28d. Abajo = variacion si se mantiene el ritmo 7d.">Proy. cierre</th>
+          <th class="num">Crecim.</th>
+          <th class="num">Crec. %</th>
+          <th>Tend.</th>
+        </tr>
+      </thead>
+      <tbody id="v2CarteraBody">
+        <tr><td colspan="10" class="v2-empty">Cargando cartera...</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="v2-sub" style="padding:8px 0;line-height:1.6">
+    Rides = bookings COMPLETED. Objetivo +2,500 = crecimiento AGREGADO de la cartera (Σ proy − Σ mes ant). Techo de <b>public.workspace_settings</b>. Update diario 7:47 AM.
+  </div>
+</div>
+
+<!-- V2 View: Expansion Top 40 -->
+<div id="view-expansion" class="v2-view">
+  <div class="v2-toolbar">
+    <div>
+      <h2>Expansión Top 40 — portafolio</h2>
+      <div class="v2-sub" id="v2ExpansionSnapshotDate">Snapshot: —</div>
+    </div>
+  </div>
+  <div class="v2-kpi-row">
+    <div class="v2-kpi"><div class="v2-kpi-label">Mes anterior (cerrado)</div><div class="v2-kpi-value" id="v2ExpMayo">—</div><div class="v2-kpi-sub">rides Top 40</div></div>
+    <div class="v2-kpi"><div class="v2-kpi-label">Proy. cierre mes</div><div class="v2-kpi-value" id="v2ExpProy">—</div><div class="v2-kpi-sub" id="v2ExpProySub">—</div></div>
+    <div class="v2-kpi"><div class="v2-kpi-label">Crecimiento neto</div><div class="v2-kpi-value" id="v2ExpNeto">—</div><div class="v2-kpi-sub" id="v2ExpNetoSub">—</div></div>
+    <div class="v2-kpi"><div class="v2-kpi-label">Expanden / contraen</div><div class="v2-kpi-value" id="v2ExpSplit">—</div><div class="v2-kpi-sub">de 40 cuentas</div></div>
+  </div>
+  <div class="v2-table-wrap">
+    <table class="v2-table" id="v2ExpansionTable">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Cuenta</th>
+          <th class="num">Mes ant</th>
+          <th class="num">MTD</th>
+          <th class="num v2-tooltip" data-tooltip="Numero grande = proy. cierre a ritmo 28d. Abajo = variacion a ritmo 7d.">Proy. cierre</th>
+          <th class="num">Crecim.</th>
+          <th class="num">Crec. %</th>
+          <th>Tend.</th>
+        </tr>
+      </thead>
+      <tbody id="v2ExpansionBody">
+        <tr><td colspan="8" class="v2-empty">Cargando Top 40...</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="v2-sub" style="padding:8px 0;line-height:1.6">
+    Top 40 por rides del mes anterior cerrado (excluye demo/test). Expansión = proy. cierre supera el mes anterior. Update diario 7:48 AM.
+  </div>
+</div>
+
+<!-- V2 View: Manualidad -->
+<div id="view-manualidad" class="v2-view">
+  <div class="v2-toolbar">
+    <div>
+      <h2>Manualidad — asignación flota propia (MY_FLEET)</h2>
+      <div class="v2-sub" id="v2ManualidadSnapshotDate">Snapshot: —</div>
+    </div>
+  </div>
+  <div class="v2-kpi-row">
+    <div class="v2-kpi"><div class="v2-kpi-label">Cuentas RUTA (&gt;3)</div><div class="v2-kpi-value" id="v2ManRuta">—</div><div class="v2-kpi-sub">ruta nativa, no forzar 1-a-1</div></div>
+    <div class="v2-kpi"><div class="v2-kpi-label">Cuentas FRICCIÓN (&lt;3)</div><div class="v2-kpi-value" id="v2ManFric">—</div><div class="v2-kpi-sub">target ≤10% manual</div></div>
+    <div class="v2-kpi warn"><div class="v2-kpi-label">Atención (Δ manual)</div><div class="v2-kpi-value" id="v2ManAten">—</div><div class="v2-kpi-sub" id="v2ManAtenSub">peor alza semanal (fricción)</div></div>
+  </div>
+  <div class="v2-table-wrap">
+    <table class="v2-table" id="v2ManualidadTable">
+      <thead id="v2ManualidadHead"></thead>
+      <tbody id="v2ManualidadBody">
+        <tr><td colspan="10" class="v2-empty">Cargando manualidad...</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="v2-sub" style="padding:8px 0;line-height:1.6">
+    % Manual = was_manually_assigned sobre flota propia (silver.tsr, MY_FLEET). AvgConc &gt;3 = ruta nativa. Δ = última semana vs promedio de las previas. Semanas ISO (lun). Update diario 7:49 AM.
   </div>
 </div>
 

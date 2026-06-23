@@ -9,7 +9,13 @@ let v2HealthCheck = [];
 let v2HCSnapshotDate = null;
 let v2Watchlist = [];
 let v2WatchlistSnapshotDate = null;
-let v2Loaded = { rollouts: false, hc: false };
+let v2Cartera = [];
+let v2CarteraSnapshotDate = null;
+let v2Expansion = [];
+let v2ExpansionSnapshotDate = null;
+let v2Manualidad = [];
+let v2ManualidadSnapshotDate = null;
+let v2Loaded = { rollouts: false, hc: false, cartera: false, expansion: false, manualidad: false };
 
 // v2.2: Sort state, persisted en localStorage
 let v2HCSort = (function() {
@@ -57,6 +63,9 @@ function v2ShowTab(tab) {
     v2LoadHealthCheck();
     v2LoadWatchlist();
   }
+  if (tab === 'cartera' && !v2Loaded.cartera) v2LoadCartera();
+  if (tab === 'expansion' && !v2Loaded.expansion) v2LoadExpansion();
+  if (tab === 'manualidad' && !v2Loaded.manualidad) v2LoadManualidad();
 }
 
 // ============================================================
@@ -171,7 +180,9 @@ async function v2SaveInline(el, table) {
   try {
     const { error } = await sb.from(table).update({ [field]: value }).eq('id', id);
     if (error) throw error;
-    const list = table === 'rollouts' ? v2Rollouts : v2HealthCheck;
+    const list = table === 'rollouts' ? v2Rollouts
+      : table === 'manualidad_weekly' ? v2Manualidad
+      : v2HealthCheck;
     const row = list.find(r => String(r.id) === String(id));
     if (row) row[field] = value;
     el.classList.remove('saving');
@@ -749,4 +760,261 @@ function v2ToggleChurn() {
   const btn = document.getElementById('v2ChurnToggle');
   if (c.style.display === 'none') { c.style.display = ''; btn.textContent = 'Ocultar'; }
   else { c.style.display = 'none'; btn.textContent = 'Mostrar'; }
+}
+
+// ============================================================
+// HELPERS compartidos (Cartera / Expansion / Manualidad)
+// ============================================================
+function v2Num(v) { return (v == null || v === '') ? '—' : Number(v).toLocaleString('en-US'); }
+
+function v2ProyCell(p28, p7) {
+  const big = v2Num(p28);
+  let sub = '';
+  const n = (p7 == null || p28 == null) ? null : (Number(p7) - Number(p28));
+  if (n == null) sub = '';
+  else if (n > 0) sub = '<small style="display:block;font-size:10px;font-weight:700;color:var(--verde-500)">&#9650; +' + Number(n).toLocaleString('en-US') + ' 7d</small>';
+  else if (n < 0) sub = '<small style="display:block;font-size:10px;font-weight:700;color:var(--rojo)">&#9660; &minus;' + Math.abs(n).toLocaleString('en-US') + ' 7d</small>';
+  else sub = '<small style="display:block;font-size:10px;color:var(--neutral-800)">= 7d</small>';
+  return '<span style="font-weight:600">' + big + '</span>' + sub;
+}
+
+function v2DeltaCell(d) {
+  if (d == null) return { txt: '—', cls: '' };
+  const n = Number(d);
+  if (n > 0) return { txt: '+' + n.toLocaleString('en-US'), cls: 'style="color:var(--verde-500);font-weight:700"' };
+  if (n < 0) return { txt: '&minus;' + Math.abs(n).toLocaleString('en-US'), cls: 'style="color:var(--rojo);font-weight:700"' };
+  return { txt: '0', cls: 'style="color:var(--neutral-800)"' };
+}
+
+function v2TendPill(d) {
+  if (d == null || Number(d) === 0) return '<span class="v2-pill v2-pill-gris">&mdash; Igual</span>';
+  return Number(d) > 0
+    ? '<span class="v2-pill v2-pill-verde">&#9650; Sube</span>'
+    : '<span class="v2-pill v2-pill-rojo">&#9660; Baja</span>';
+}
+
+// ============================================================
+// CARTERA 2500
+// ============================================================
+async function v2LoadCartera() {
+  const body = document.getElementById('v2CarteraBody');
+  try {
+    const { data: latest, error: e1 } = await sb.from('cartera_2500')
+      .select('snapshot_date').order('snapshot_date', { ascending: false }).limit(1);
+    if (e1) throw e1;
+    if (!latest || !latest.length) {
+      v2SetHTML(body, '<tr><td colspan="10" class="v2-empty">Sin snapshot aun. El sync <code>cartera_2500</code> corre diario 7:47 AM.</td></tr>');
+      document.getElementById('v2CarteraSnapshotDate').textContent = 'Snapshot: sin datos';
+      v2Loaded.cartera = true; return;
+    }
+    v2CarteraSnapshotDate = latest[0].snapshot_date;
+    const { data, error } = await sb.from('cartera_2500')
+      .select('*').eq('snapshot_date', v2CarteraSnapshotDate).order('rank', { ascending: true });
+    if (error) throw error;
+    v2Cartera = data || [];
+    v2Loaded.cartera = true;
+    const corte = v2Cartera[0] && v2Cartera[0].corte_date ? ' · corte ' + v2Cartera[0].corte_date : '';
+    document.getElementById('v2CarteraSnapshotDate').textContent = 'Snapshot: ' + v2CarteraSnapshotDate + corte;
+    v2RenderCartera();
+  } catch (err) {
+    v2SetHTML(body, '<tr><td colspan="10" class="v2-empty">Error: ' + v2Esc(err.message) + '</td></tr>');
+    console.error('[v2 cartera]', err);
+  }
+}
+
+function v2RenderCartera() {
+  const body = document.getElementById('v2CarteraBody');
+  if (!v2Cartera.length) { v2SetHTML(body, '<tr><td colspan="10" class="v2-empty">Sin cuentas.</td></tr>'); return; }
+  const totMayo = v2Cartera.reduce((a, r) => a + (r.mes_ant || 0), 0);
+  const totProy = v2Cartera.reduce((a, r) => a + (r.proy_lenta || 0), 0);
+  const totProy7 = v2Cartera.reduce((a, r) => a + (r.proy_rapida || 0), 0);
+  const crec = totProy - totMayo;
+  const gap = crec - 2500;
+  const var7 = totProy7 - totProy;
+  document.getElementById('v2CarteraMayo').textContent = totMayo.toLocaleString('en-US');
+  document.getElementById('v2CarteraProy').textContent = totProy.toLocaleString('en-US');
+  document.getElementById('v2CarteraProySub').textContent = (var7 >= 0 ? '▲ +' : '▼ −') + Math.abs(var7).toLocaleString('en-US') + ' a ritmo 7d';
+  document.getElementById('v2CarteraCrec').textContent = (crec >= 0 ? '+' : '−') + Math.abs(crec).toLocaleString('en-US');
+  document.getElementById('v2CarteraGap').textContent = (gap >= 0 ? 'CUMPLE +' : 'FALTA −') + Math.abs(gap).toLocaleString('en-US');
+  const gapKpi = document.getElementById('v2CarteraGapKpi');
+  if (gapKpi) gapKpi.className = 'v2-kpi ' + (gap >= 0 ? '' : 'warn');
+  const html = v2Cartera.map(r => {
+    const dist = (r.techo_envios != null && r.mes_ant != null) ? (r.techo_envios - r.mes_ant) : null;
+    const distCell = r.techo_envios == null
+      ? '<span style="color:var(--rojo)">&mdash;</span><small style="display:block;font-size:10px;color:var(--neutral-800)">sin techo</small>'
+      : '<span style="font-weight:700;color:var(--azul-oscuro-900)">' + v2Num(dist) + '</span><small style="display:block;font-size:10px;color:var(--neutral-800)">techo ' + v2Num(r.techo_envios) + '</small>';
+    const d = v2DeltaCell(r.delta);
+    const pct = r.delta_pct == null ? '&mdash;' : '<span ' + d.cls + '>' + (r.delta_pct >= 0 ? '+' : '−') + Math.abs(Math.round(r.delta_pct * 100)) + '%</span>';
+    return '<tr>' +
+      '<td>' + (r.rank || '—') + '</td>' +
+      '<td class="v2-cliente">' + v2Esc(r.cliente) + ' <small>' + v2Esc(r.am_owner || '') + '</small></td>' +
+      '<td>' + v2Esc(r.pais || '—') + '</td>' +
+      '<td class="num">' + distCell + '</td>' +
+      '<td class="num">' + v2Num(r.mes_ant) + '</td>' +
+      '<td class="num">' + v2Num(r.mtd) + '</td>' +
+      '<td class="num">' + v2ProyCell(r.proy_lenta, r.proy_rapida) + '</td>' +
+      '<td class="num" ' + d.cls + '>' + d.txt + '</td>' +
+      '<td class="num">' + pct + '</td>' +
+      '<td>' + v2TendPill(r.delta) + '</td>' +
+      '</tr>';
+  }).join('');
+  v2SetHTML(body, html);
+}
+
+// ============================================================
+// EXPANSION TOP 40
+// ============================================================
+async function v2LoadExpansion() {
+  const body = document.getElementById('v2ExpansionBody');
+  try {
+    const { data: latest, error: e1 } = await sb.from('expansion_top40')
+      .select('snapshot_date').order('snapshot_date', { ascending: false }).limit(1);
+    if (e1) throw e1;
+    if (!latest || !latest.length) {
+      v2SetHTML(body, '<tr><td colspan="8" class="v2-empty">Sin snapshot aun. El sync <code>expansion_top40</code> corre diario 7:48 AM.</td></tr>');
+      document.getElementById('v2ExpansionSnapshotDate').textContent = 'Snapshot: sin datos';
+      v2Loaded.expansion = true; return;
+    }
+    v2ExpansionSnapshotDate = latest[0].snapshot_date;
+    const { data, error } = await sb.from('expansion_top40')
+      .select('*').eq('snapshot_date', v2ExpansionSnapshotDate).order('rank', { ascending: true });
+    if (error) throw error;
+    v2Expansion = data || [];
+    v2Loaded.expansion = true;
+    const corte = v2Expansion[0] && v2Expansion[0].corte_date ? ' · corte ' + v2Expansion[0].corte_date : '';
+    document.getElementById('v2ExpansionSnapshotDate').textContent = 'Snapshot: ' + v2ExpansionSnapshotDate + corte;
+    v2RenderExpansion();
+  } catch (err) {
+    v2SetHTML(body, '<tr><td colspan="8" class="v2-empty">Error: ' + v2Esc(err.message) + '</td></tr>');
+    console.error('[v2 expansion]', err);
+  }
+}
+
+function v2RenderExpansion() {
+  const body = document.getElementById('v2ExpansionBody');
+  if (!v2Expansion.length) { v2SetHTML(body, '<tr><td colspan="8" class="v2-empty">Sin cuentas.</td></tr>'); return; }
+  const totMayo = v2Expansion.reduce((a, r) => a + (r.mes_ant || 0), 0);
+  const totProy = v2Expansion.reduce((a, r) => a + (r.proy_lenta || 0), 0);
+  const totProy7 = v2Expansion.reduce((a, r) => a + (r.proy_rapida || 0), 0);
+  const neto = totProy - totMayo;
+  const var7 = totProy7 - totProy;
+  const nUp = v2Expansion.filter(r => (r.delta || 0) > 0).length;
+  const nDown = v2Expansion.filter(r => (r.delta || 0) < 0).length;
+  document.getElementById('v2ExpMayo').textContent = totMayo.toLocaleString('en-US');
+  document.getElementById('v2ExpProy').textContent = totProy.toLocaleString('en-US');
+  document.getElementById('v2ExpProySub').textContent = (var7 >= 0 ? '▲ +' : '▼ −') + Math.abs(var7).toLocaleString('en-US') + ' a ritmo 7d';
+  const netoEl = document.getElementById('v2ExpNeto');
+  netoEl.textContent = (neto >= 0 ? '+' : '−') + Math.abs(neto).toLocaleString('en-US');
+  netoEl.style.color = neto >= 0 ? 'var(--verde-500)' : 'var(--rojo)';
+  const pctNeto = totMayo ? (neto / totMayo * 100) : 0;
+  document.getElementById('v2ExpNetoSub').textContent = (pctNeto >= 0 ? '+' : '−') + Math.abs(pctNeto).toFixed(1) + '% vs mes ant';
+  document.getElementById('v2ExpSplit').textContent = nUp + ' / ' + nDown;
+  const html = v2Expansion.map(r => {
+    const neg = (r.delta || 0) < 0;
+    const d = v2DeltaCell(r.delta);
+    const pct = r.delta_pct == null ? '&mdash;' : '<span ' + d.cls + '>' + (r.delta_pct >= 0 ? '+' : '−') + Math.abs(Math.round(r.delta_pct * 100)) + '%</span>';
+    const region = r.region ? ' <small>' + v2Esc(r.region) + '</small>' : '';
+    return '<tr' + (neg ? ' style="background:#fdf6f5"' : '') + '>' +
+      '<td>' + (r.rank || '—') + '</td>' +
+      '<td class="v2-cliente">' + v2Esc(r.workspace_name) + region + '</td>' +
+      '<td class="num">' + v2Num(r.mes_ant) + '</td>' +
+      '<td class="num">' + v2Num(r.mtd) + '</td>' +
+      '<td class="num">' + v2ProyCell(r.proy_lenta, r.proy_rapida) + '</td>' +
+      '<td class="num" ' + d.cls + '>' + d.txt + '</td>' +
+      '<td class="num">' + pct + '</td>' +
+      '<td>' + v2TendPill(r.delta) + '</td>' +
+      '</tr>';
+  }).join('');
+  v2SetHTML(body, html);
+}
+
+// ============================================================
+// MANUALIDAD (semanas dinamicas via jsonb)
+// ============================================================
+async function v2LoadManualidad() {
+  const body = document.getElementById('v2ManualidadBody');
+  try {
+    const { data: latest, error: e1 } = await sb.from('manualidad_weekly')
+      .select('snapshot_date').order('snapshot_date', { ascending: false }).limit(1);
+    if (e1) throw e1;
+    if (!latest || !latest.length) {
+      v2SetHTML(body, '<tr><td colspan="10" class="v2-empty">Sin snapshot aun. El sync <code>manualidad_weekly</code> corre diario 7:49 AM.</td></tr>');
+      document.getElementById('v2ManualidadSnapshotDate').textContent = 'Snapshot: sin datos';
+      v2Loaded.manualidad = true; return;
+    }
+    v2ManualidadSnapshotDate = latest[0].snapshot_date;
+    const { data, error } = await sb.from('manualidad_weekly')
+      .select('*').eq('snapshot_date', v2ManualidadSnapshotDate);
+    if (error) throw error;
+    v2Manualidad = data || [];
+    v2Loaded.manualidad = true;
+    const corte = v2Manualidad[0] && v2Manualidad[0].corte_date ? ' · ult. semana ' + v2Manualidad[0].corte_date : '';
+    document.getElementById('v2ManualidadSnapshotDate').textContent = 'Snapshot: ' + v2ManualidadSnapshotDate + corte;
+    v2RenderManualidad();
+  } catch (err) {
+    v2SetHTML(body, '<tr><td colspan="10" class="v2-empty">Error: ' + v2Esc(err.message) + '</td></tr>');
+    console.error('[v2 manualidad]', err);
+  }
+}
+
+function v2RenderManualidad() {
+  const head = document.getElementById('v2ManualidadHead');
+  const body = document.getElementById('v2ManualidadBody');
+  if (!v2Manualidad.length) { v2SetHTML(head, ''); v2SetHTML(body, '<tr><td colspan="10" class="v2-empty">Sin cuentas.</td></tr>'); return; }
+  // columnas de semana: tomar la fila con mas semanas como referencia
+  let weekRef = [];
+  v2Manualidad.forEach(r => { const s = Array.isArray(r.semanas) ? r.semanas : []; if (s.length > weekRef.length) weekRef = s; });
+  // sort: ruta primero (avgconc desc), luego friccion (avgconc desc)
+  const rows = v2Manualidad.slice().sort((a, b) => {
+    const sa = a.segmento === 'ruta' ? 0 : 1, sbb = b.segmento === 'ruta' ? 0 : 1;
+    if (sa !== sbb) return sa - sbb;
+    return Number(b.avgconc || 0) - Number(a.avgconc || 0);
+  });
+  // KPIs
+  document.getElementById('v2ManRuta').textContent = v2Manualidad.filter(r => r.segmento === 'ruta').length;
+  document.getElementById('v2ManFric').textContent = v2Manualidad.filter(r => r.segmento === 'friccion').length;
+  let worst = null;
+  v2Manualidad.filter(r => r.segmento === 'friccion' && r.delta_pp != null).forEach(r => { if (!worst || Number(r.delta_pp) > Number(worst.delta_pp)) worst = r; });
+  document.getElementById('v2ManAten').textContent = (worst && Number(worst.delta_pp) > 0)
+    ? (String(worst.workspace_name).split(' ')[0] + ' +' + Number(worst.delta_pp).toFixed(0) + 'pp') : '—';
+  // head
+  const headHtml = '<tr><th>Cuenta</th>' +
+    '<th class="num v2-tooltip" data-tooltip="Pedidos concurrentes por conductor (promedio). &gt;3 = ruta nativa.">AvgConc</th>' +
+    weekRef.map(w => '<th class="num">' + v2Esc(w.w) + '<br><small style="font-weight:400">' + v2Esc(String(w.start).slice(5)) + '</small></th>').join('') +
+    '<th class="num v2-tooltip" data-tooltip="% manual de la ultima semana menos el promedio de las previas. Verde = manual bajo (bueno); rojo = subio.">&Delta; prev</th>' +
+    '<th>Segmento / política</th><th>Comentario</th></tr>';
+  v2SetHTML(head, headHtml);
+  // body
+  const html = rows.map(r => {
+    const s = Array.isArray(r.semanas) ? r.semanas : [];
+    const byStart = {}; s.forEach(x => { byStart[x.start] = x; });
+    const acHi = Number(r.avgconc) > 3;
+    const acStyle = acHi ? 'background:#fdf1d4;color:#a9760a' : 'background:#eef1f6;color:#8a96aa';
+    const wkCells = weekRef.map((w, i) => {
+      const cell = byStart[w.start];
+      const isLast = i === weekRef.length - 1;
+      if (!cell) return '<td class="num" style="color:var(--neutral-800)">&mdash;</td>';
+      return '<td class="num"' + (isLast ? ' style="font-weight:800"' : '') + '>' + cell.pct + '%</td>';
+    }).join('');
+    let dStyle = 'color:var(--neutral-800)';
+    if (r.segmento === 'friccion' && r.delta_pp != null) {
+      dStyle = Number(r.delta_pp) <= -1 ? 'color:var(--verde-500);font-weight:700'
+        : Number(r.delta_pp) >= 1 ? 'color:var(--rojo);font-weight:700' : 'color:var(--neutral-800)';
+    }
+    const dTxt = r.delta_pp == null ? '&mdash;'
+      : ((Number(r.delta_pp) > 0 ? '+' : Number(r.delta_pp) < 0 ? '−' : '') + Math.abs(Number(r.delta_pp)).toFixed(0) + 'pp');
+    const safeId = v2Esc(r.id);
+    const polLabel = r.segmento === 'ruta'
+      ? '<span class="v2-pill v2-pill-amarillo" style="margin-right:6px">ruta</span>'
+      : '<span class="v2-pill v2-pill-verde" style="margin-right:6px">fricción</span>';
+    return '<tr>' +
+      '<td class="v2-cliente">' + v2Esc(r.workspace_name) + '</td>' +
+      '<td class="num"><span style="display:inline-block;padding:3px 9px;border-radius:14px;font-weight:800;font-size:12px;' + acStyle + '">' + Number(r.avgconc).toFixed(2) + '</span></td>' +
+      wkCells +
+      '<td class="num" style="' + dStyle + '">' + dTxt + '</td>' +
+      '<td>' + polLabel + '<span class="v2-editable" data-id="' + safeId + '" data-field="politica" contenteditable="true" onblur="v2SaveInline(this,\'manualidad_weekly\')">' + v2Esc(r.politica || '') + '</span></td>' +
+      '<td><span class="v2-editable" data-id="' + safeId + '" data-field="comentario" contenteditable="true" onblur="v2SaveInline(this,\'manualidad_weekly\')">' + v2Esc(r.comentario || '') + '</span></td>' +
+      '</tr>';
+  }).join('');
+  v2SetHTML(body, html);
 }

@@ -938,7 +938,7 @@ async function v2LoadManualidad() {
       .select('snapshot_date').order('snapshot_date', { ascending: false }).limit(1);
     if (e1) throw e1;
     if (!latest || !latest.length) {
-      v2SetHTML(body, '<tr><td colspan="10" class="v2-empty">Sin snapshot aun. El sync <code>manualidad_weekly</code> corre diario 7:49 AM.</td></tr>');
+      v2SetHTML(body, '<tr><td colspan="11" class="v2-empty">Sin snapshot aun. El sync <code>manualidad_weekly</code> corre diario 7:49 AM.</td></tr>');
       document.getElementById('v2ManualidadSnapshotDate').textContent = 'Snapshot: sin datos';
       v2Loaded.manualidad = true; return;
     }
@@ -960,7 +960,7 @@ async function v2LoadManualidad() {
 function v2RenderManualidad() {
   const head = document.getElementById('v2ManualidadHead');
   const body = document.getElementById('v2ManualidadBody');
-  if (!v2Manualidad.length) { v2SetHTML(head, ''); v2SetHTML(body, '<tr><td colspan="10" class="v2-empty">Sin cuentas.</td></tr>'); return; }
+  if (!v2Manualidad.length) { v2SetHTML(head, ''); v2SetHTML(body, '<tr><td colspan="11" class="v2-empty">Sin cuentas.</td></tr>'); return; }
   // columnas de semana: tomar la fila con mas semanas como referencia
   let weekRef = [];
   v2Manualidad.forEach(r => { const s = Array.isArray(r.semanas) ? r.semanas : []; if (s.length > weekRef.length) weekRef = s; });
@@ -982,7 +982,8 @@ function v2RenderManualidad() {
     '<th class="num v2-tooltip" data-tooltip="Pedidos concurrentes por conductor (promedio). &gt;3 = ruta nativa.">AvgConc</th>' +
     weekRef.map(w => '<th class="num">' + v2Esc(w.w) + '<br><small style="font-weight:400">' + v2Esc(String(w.start).slice(5)) + '</small></th>').join('') +
     '<th class="num v2-tooltip" data-tooltip="% manual de la ultima semana menos el promedio de las previas. Verde = manual bajo (bueno); rojo = subio.">&Delta; prev</th>' +
-    '<th>Segmento / política</th><th>Comentario</th></tr>';
+    '<th>Segmento / política</th><th>Comentario</th>' +
+    '<th class="num v2-tooltip" data-tooltip="Pedidos MY_FLEET de la última semana (la columna de % en negrita).">Pedidos</th></tr>';
   v2SetHTML(head, headHtml);
   // body
   const html = rows.map(r => {
@@ -1003,6 +1004,8 @@ function v2RenderManualidad() {
     }
     const dTxt = r.delta_pp == null ? '&mdash;'
       : ((Number(r.delta_pp) > 0 ? '+' : Number(r.delta_pp) < 0 ? '−' : '') + Math.abs(Number(r.delta_pp)).toFixed(0) + 'pp');
+    const lastWk = weekRef.length ? byStart[weekRef[weekRef.length - 1].start] : null;
+    const pedidos = lastWk && lastWk.total != null ? Number(lastWk.total).toLocaleString('es') : '&mdash;';
     const safeId = v2Esc(r.id);
     const polLabel = r.segmento === 'ruta'
       ? '<span class="v2-pill v2-pill-amarillo" style="margin-right:6px">ruta</span>'
@@ -1014,6 +1017,7 @@ function v2RenderManualidad() {
       '<td class="num" style="' + dStyle + '">' + dTxt + '</td>' +
       '<td>' + polLabel + '<span class="v2-editable" data-id="' + safeId + '" data-field="politica" contenteditable="true" onblur="v2SaveInline(this,\'manualidad_weekly\')">' + v2Esc(r.politica || '') + '</span></td>' +
       '<td><span class="v2-editable" data-id="' + safeId + '" data-field="comentario" contenteditable="true" onblur="v2SaveInline(this,\'manualidad_weekly\')">' + v2Esc(r.comentario || '') + '</span></td>' +
+      '<td class="num">' + pedidos + '</td>' +
       '</tr>';
   }).join('');
   v2SetHTML(body, html);

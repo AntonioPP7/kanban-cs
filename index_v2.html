@@ -242,6 +242,9 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
 .v2-gap-split b { font-weight:700; color:var(--azul-oscuro-900); }
 .v2-gap-seg .over { color:var(--rojo); font-weight:700; }
 .v2-gap-seg .ok { color:var(--verde-500); font-weight:700; }
+.v2-gap-iso { display:flex; gap:10px; justify-content:flex-end; align-items:baseline; margin-top:6px; padding-top:6px; border-top:1px solid #dde3ec; font-size:11px; color:var(--neutral-800); }
+.v2-gap-iso-lead { font-weight:600; }
+.v2-gap-iso b { color:var(--azul-oscuro-900); }
 .v2-filters select, .v2-filters input { padding:7px 12px; border:1px solid var(--neutral-300); border-radius:6px; font-size:12px; background:#fff; color:var(--azul-oscuro-500); font-family:inherit; }
 .v2-btn { background:var(--azul-500); color:#fff; border:0; padding:9px 16px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; }
 .v2-btn:hover { background:var(--azul-800); }
@@ -854,12 +857,18 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
       <h2>Manualidad — asignación flota propia (MY_FLEET)</h2>
       <div class="v2-sub" id="v2ManualidadSnapshotDate">Snapshot: —</div>
     </div>
-    <div class="v2-gap-badge v2-tooltip" data-tooltip="% manual de la última semana ponderado por pedidos (cuentas grandes pesan más) menos el target de 10pp. Indistinto del segmento. Desglose: solo fricción / solo ruta (ruta es referencial, su target no es 10%).">
+    <div class="v2-gap-badge v2-tooltip" data-tooltip="% manual ponderado por pedidos (cuentas grandes pesan más) menos el target de 10pp. Indistinto del segmento. 'Al día' = rolling últimos 7 días hasta ayer. 'ISO ant.' = última semana lun–dom cerrada. Desglose fricción / ruta (ruta es referencial: su target no es 10%).">
       <div class="v2-gap-label">Distancia al 10% manual</div>
-      <div class="v2-gap-main"><span id="v2ManGapGeneral">—</span> <small>vs 10%</small></div>
+      <div class="v2-gap-main"><span id="v2ManGapGeneral">—</span> <small>al día <span id="v2ManGapR7Label" style="opacity:.7"></span></small></div>
       <div class="v2-gap-split">
         <span class="v2-gap-seg"><b>Fricción</b> <span id="v2ManGapFric">—</span></span>
         <span class="v2-gap-seg"><b>Ruta</b> <span id="v2ManGapRuta">—</span></span>
+      </div>
+      <div class="v2-gap-iso">
+        <span class="v2-gap-iso-lead">Sem. ISO ant. <b id="v2ManGapIsoLabel"></b>:</span>
+        <span class="v2-gap-seg"><span id="v2ManGapIsoGeneral">—</span></span>
+        <span class="v2-gap-seg"><b>Fric</b> <span id="v2ManGapIsoFric">—</span></span>
+        <span class="v2-gap-seg"><b>Ruta</b> <span id="v2ManGapIsoRuta">—</span></span>
       </div>
     </div>
   </div>
@@ -876,8 +885,15 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
       </tbody>
     </table>
   </div>
-  <div class="v2-sub" style="padding:8px 0;line-height:1.6">
-    % Manual = was_manually_assigned sobre flota propia (silver.tsr, MY_FLEET). AvgConc &gt;3 = ruta nativa. Δ = última semana vs promedio de las previas. Semanas ISO (lun). Update diario 7:49 AM.
+  <div class="v2-sub" style="padding:10px 12px;line-height:1.7;background:#f6f8fb;border:1px solid #e3e8f0;border-radius:10px;margin-top:6px">
+    <b style="color:var(--azul-oscuro-900)">Cómo se mide</b><br>
+    <b>% Manual</b> = pedidos <code>was_manually_assigned</code> / total, solo flota propia (<code>silver.tsr</code>, MY_FLEET). ·
+    <b>AvgConc</b> = pedidos concurrentes por conductor; &gt;3 = ruta nativa (no se fuerza 1-a-1), &lt;3 = fricción (target ≤10%). ·
+    <b>Δ prev</b> = % manual de la última semana menos el promedio de las previas. ·
+    <b>Pedidos</b> = volumen MY_FLEET de la última semana ISO.<br>
+    <b>Badge «Distancia al 10%»</b> = % manual <b>ponderado por pedidos</b> (cuentas grandes pesan más) menos el target de 10pp; verde = en/bajo target, rojo = encima.
+    <b>Al día</b> = rolling de los últimos 7 días hasta ayer (se mueve cada día). <b>Sem. ISO ant.</b> = última semana lun–dom cerrada. El desglose <b>ruta</b> es referencial (su target no es 10%).<br>
+    <span style="opacity:.75">Solo cuentas con ≥20 pedidos MY_FLEET en la ventana. Semanas ISO (lun). Update diario 7:49 AM.</span>
   </div>
 </div>
 

@@ -946,7 +946,13 @@ async function v2LoadManualidad() {
     const { data, error } = await sb.from('manualidad_weekly')
       .select('*').eq('snapshot_date', v2ManualidadSnapshotDate);
     if (error) throw error;
-    v2Manualidad = data || [];
+    // Separar el centinela rolling-7d empacado en `semanas` (start === '__rolling7__').
+    v2Manualidad = (data || []).map(r => {
+      const all = Array.isArray(r.semanas) ? r.semanas : [];
+      r.rolling7 = all.find(x => x && x.start === '__rolling7__') || null; // {pct,total,wstart,wend}
+      r.semanas = all.filter(x => !x || x.start !== '__rolling7__');
+      return r;
+    });
     v2Loaded.manualidad = true;
     const corte = v2Manualidad[0] && v2Manualidad[0].corte_date ? ' · ult. semana ' + v2Manualidad[0].corte_date : '';
     document.getElementById('v2ManualidadSnapshotDate').textContent = 'Snapshot: ' + v2ManualidadSnapshotDate + corte;
@@ -977,18 +983,20 @@ function v2RenderManualidad() {
   v2Manualidad.filter(r => r.segmento === 'friccion' && r.delta_pp != null).forEach(r => { if (!worst || Number(r.delta_pp) > Number(worst.delta_pp)) worst = r; });
   document.getElementById('v2ManAten').textContent = (worst && Number(worst.delta_pp) > 0)
     ? (String(worst.workspace_name).split(' ')[0] + ' +' + Number(worst.delta_pp).toFixed(0) + 'pp') : '—';
-  // Distancia al 10%: % manual ultima semana ponderado por pedidos − 10pp (general / friccion / ruta)
+  // Distancia al 10%: % manual ponderado por pedidos − 10pp (general / friccion / ruta).
+  // Dos lecturas: rolling 7d "al dia" (r.rolling7) y ultima semana ISO cerrada (ult. col de semanas).
   const lastStart = weekRef.length ? weekRef[weekRef.length - 1].start : null;
-  const lastWeekCell = (r) => {
+  const isoWeekCell = (r) => {
     const s = Array.isArray(r.semanas) ? r.semanas : [];
     if (!s.length) return null;
     let cell = lastStart ? s.find(x => x.start === lastStart) : null;
     return cell || s[s.length - 1]; // fallback: ultima semana propia de la cuenta
   };
-  const weightedGap = (subset) => {
+  // gap ponderado sobre un subset, tomando la celda via accessor (rolling7 o semana ISO)
+  const weightedGap = (subset, cellOf) => {
     let num = 0, den = 0;
     subset.forEach(r => {
-      const c = lastWeekCell(r);
+      const c = cellOf(r);
       if (c && c.total != null && c.pct != null) { num += Number(c.pct) * Number(c.total); den += Number(c.total); }
     });
     return den === 0 ? null : (num / den - 10);
@@ -1002,9 +1010,26 @@ function v2RenderManualidad() {
     el.classList.remove('over', 'ok');
     if (g != null) el.classList.add(g > 0 ? 'over' : 'ok');
   };
-  applyGap('v2ManGapGeneral', weightedGap(v2Manualidad), 1);
-  applyGap('v2ManGapFric', weightedGap(v2Manualidad.filter(r => r.segmento === 'friccion')), 0);
-  applyGap('v2ManGapRuta', weightedGap(v2Manualidad.filter(r => r.segmento === 'ruta')), 0);
+  const fric = v2Manualidad.filter(r => r.segmento === 'friccion');
+  const ruta = v2Manualidad.filter(r => r.segmento === 'ruta');
+  // 1) Al dia (rolling 7d)
+  const r7 = r => r.rolling7;
+  applyGap('v2ManGapGeneral', weightedGap(v2Manualidad, r7), 1);
+  applyGap('v2ManGapFric', weightedGap(fric, r7), 0);
+  applyGap('v2ManGapRuta', weightedGap(ruta, r7), 0);
+  // 2) Semana ISO anterior (cerrada)
+  applyGap('v2ManGapIsoGeneral', weightedGap(v2Manualidad, isoWeekCell), 1);
+  applyGap('v2ManGapIsoFric', weightedGap(fric, isoWeekCell), 0);
+  applyGap('v2ManGapIsoRuta', weightedGap(ruta, isoWeekCell), 0);
+  // etiquetas de ventana
+  const r7row = v2Manualidad.find(r => r.rolling7 && r.rolling7.wstart);
+  const r7lbl = document.getElementById('v2ManGapR7Label');
+  if (r7lbl) r7lbl.textContent = r7row
+    ? '· ' + String(r7row.rolling7.wstart).slice(5) + ' a ' + String(r7row.rolling7.wend).slice(5)
+    : '';
+  const isoLbl = document.getElementById('v2ManGapIsoLabel');
+  const isoW = weekRef.length ? weekRef[weekRef.length - 1].w : '';
+  if (isoLbl) isoLbl.textContent = isoW || '';
   // head
   const headHtml = '<tr><th>Cuenta</th>' +
     '<th class="num v2-tooltip" data-tooltip="Pedidos concurrentes por conductor (promedio). &gt;3 = ruta nativa.">AvgConc</th>' +

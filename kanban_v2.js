@@ -992,35 +992,45 @@ function v2RenderManualidad() {
     let cell = lastStart ? s.find(x => x.start === lastStart) : null;
     return cell || s[s.length - 1]; // fallback: ultima semana propia de la cuenta
   };
-  // gap ponderado sobre un subset, tomando la celda via accessor (rolling7 o semana ISO)
-  const weightedGap = (subset, cellOf) => {
+  // % manual ponderado por pedidos sobre un subset (cellOf = rolling7 o semana ISO)
+  const weightedPct = (subset, cellOf) => {
     let num = 0, den = 0;
     subset.forEach(r => {
       const c = cellOf(r);
       if (c && c.total != null && c.pct != null) { num += Number(c.pct) * Number(c.total); den += Number(c.total); }
     });
-    return den === 0 ? null : (num / den - 10);
+    return den === 0 ? null : (num / den);
   };
-  const fmtGap = (g, dec) => g == null ? '—'
-    : (g > 0 ? '+' : g < 0 ? '−' : '') + Math.abs(g).toFixed(dec) + 'pp';
-  const applyGap = (id, g, dec) => {
+  // % puro (dato grande). colorize: verde ≤10 / rojo >10. ruta = neutral (target 10% no aplica).
+  const applyPct = (id, p, dec, colorize) => {
     const el = document.getElementById(id);
     if (!el) return;
-    el.textContent = fmtGap(g, dec);
+    el.textContent = p == null ? '—' : p.toFixed(dec) + '%';
     el.classList.remove('over', 'ok');
-    if (g != null) el.classList.add(g > 0 ? 'over' : 'ok');
+    if (p != null && colorize) el.classList.add(p > 10 ? 'over' : 'ok');
+  };
+  // gap secundario (distancia al target)
+  const applyGap = (id, p, dec) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (p == null) { el.textContent = '—'; el.className = el.className.replace(/\b(over|ok)\b/g, ''); return; }
+    const g = p - 10;
+    el.textContent = (g > 0 ? '+' : g < 0 ? '−' : '') + Math.abs(g).toFixed(dec) + 'pp';
+    el.classList.remove('over', 'ok'); el.classList.add(g > 0 ? 'over' : 'ok');
   };
   const fric = v2Manualidad.filter(r => r.segmento === 'friccion');
   const ruta = v2Manualidad.filter(r => r.segmento === 'ruta');
-  // 1) Al dia (rolling 7d)
   const r7 = r => r.rolling7;
-  applyGap('v2ManGapGeneral', weightedGap(v2Manualidad, r7), 1);
-  applyGap('v2ManGapFric', weightedGap(fric, r7), 0);
-  applyGap('v2ManGapRuta', weightedGap(ruta, r7), 0);
-  // 2) Semana ISO anterior (cerrada)
-  applyGap('v2ManGapIsoGeneral', weightedGap(v2Manualidad, isoWeekCell), 1);
-  applyGap('v2ManGapIsoFric', weightedGap(fric, isoWeekCell), 0);
-  applyGap('v2ManGapIsoRuta', weightedGap(ruta, isoWeekCell), 0);
+  // 1) Al dia (rolling 7d) — % puro grande + gap secundario
+  const pGen = weightedPct(v2Manualidad, r7);
+  applyPct('v2ManPctGeneral', pGen, 1, true);
+  applyGap('v2ManGapGeneral', pGen, 1);
+  applyPct('v2ManPctFric', weightedPct(fric, r7), 0, true);
+  applyPct('v2ManPctRuta', weightedPct(ruta, r7), 0, false);
+  // 2) Semana ISO anterior (cerrada) — % puro
+  applyPct('v2ManPctIsoGeneral', weightedPct(v2Manualidad, isoWeekCell), 1, true);
+  applyPct('v2ManPctIsoFric', weightedPct(fric, isoWeekCell), 0, true);
+  applyPct('v2ManPctIsoRuta', weightedPct(ruta, isoWeekCell), 0, false);
   // etiquetas de ventana
   const r7row = v2Manualidad.find(r => r.rolling7 && r.rolling7.wstart);
   const r7lbl = document.getElementById('v2ManGapR7Label');

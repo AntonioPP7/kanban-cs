@@ -232,6 +232,16 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
 .v2-view .v2-sub { font-size:12px; color:var(--neutral-800); margin-bottom:16px; }
 .v2-toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:12px; }
 .v2-filters { display:flex; gap:8px; flex-wrap:wrap; }
+.v2-gap-badge { text-align:right; padding:8px 14px; border-radius:12px; background:#eef1f6; border:1px solid #dde3ec; min-width:190px; }
+.v2-gap-label { font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--neutral-800); font-weight:700; }
+.v2-gap-main { font-size:30px; font-weight:800; line-height:1.1; color:var(--azul-oscuro-900); }
+.v2-gap-main small { font-size:12px; font-weight:600; color:var(--neutral-800); }
+.v2-gap-main #v2ManGapGeneral.over { color:var(--rojo); }
+.v2-gap-main #v2ManGapGeneral.ok { color:var(--verde-500); }
+.v2-gap-split { display:flex; gap:14px; justify-content:flex-end; margin-top:4px; font-size:12px; color:var(--neutral-800); }
+.v2-gap-split b { font-weight:700; color:var(--azul-oscuro-900); }
+.v2-gap-seg .over { color:var(--rojo); font-weight:700; }
+.v2-gap-seg .ok { color:var(--verde-500); font-weight:700; }
 .v2-filters select, .v2-filters input { padding:7px 12px; border:1px solid var(--neutral-300); border-radius:6px; font-size:12px; background:#fff; color:var(--azul-oscuro-500); font-family:inherit; }
 .v2-btn { background:var(--azul-500); color:#fff; border:0; padding:9px 16px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; }
 .v2-btn:hover { background:var(--azul-800); }
@@ -843,6 +853,14 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
     <div>
       <h2>Manualidad — asignación flota propia (MY_FLEET)</h2>
       <div class="v2-sub" id="v2ManualidadSnapshotDate">Snapshot: —</div>
+    </div>
+    <div class="v2-gap-badge v2-tooltip" data-tooltip="% manual de la última semana ponderado por pedidos (cuentas grandes pesan más) menos el target de 10pp. Indistinto del segmento. Desglose: solo fricción / solo ruta (ruta es referencial, su target no es 10%).">
+      <div class="v2-gap-label">Distancia al 10% manual</div>
+      <div class="v2-gap-main"><span id="v2ManGapGeneral">—</span> <small>vs 10%</small></div>
+      <div class="v2-gap-split">
+        <span class="v2-gap-seg"><b>Fricción</b> <span id="v2ManGapFric">—</span></span>
+        <span class="v2-gap-seg"><b>Ruta</b> <span id="v2ManGapRuta">—</span></span>
+      </div>
     </div>
   </div>
   <div class="v2-kpi-row">

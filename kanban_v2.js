@@ -977,6 +977,34 @@ function v2RenderManualidad() {
   v2Manualidad.filter(r => r.segmento === 'friccion' && r.delta_pp != null).forEach(r => { if (!worst || Number(r.delta_pp) > Number(worst.delta_pp)) worst = r; });
   document.getElementById('v2ManAten').textContent = (worst && Number(worst.delta_pp) > 0)
     ? (String(worst.workspace_name).split(' ')[0] + ' +' + Number(worst.delta_pp).toFixed(0) + 'pp') : '—';
+  // Distancia al 10%: % manual ultima semana ponderado por pedidos − 10pp (general / friccion / ruta)
+  const lastStart = weekRef.length ? weekRef[weekRef.length - 1].start : null;
+  const lastWeekCell = (r) => {
+    const s = Array.isArray(r.semanas) ? r.semanas : [];
+    if (!s.length) return null;
+    let cell = lastStart ? s.find(x => x.start === lastStart) : null;
+    return cell || s[s.length - 1]; // fallback: ultima semana propia de la cuenta
+  };
+  const weightedGap = (subset) => {
+    let num = 0, den = 0;
+    subset.forEach(r => {
+      const c = lastWeekCell(r);
+      if (c && c.total != null && c.pct != null) { num += Number(c.pct) * Number(c.total); den += Number(c.total); }
+    });
+    return den === 0 ? null : (num / den - 10);
+  };
+  const fmtGap = (g, dec) => g == null ? '—'
+    : (g > 0 ? '+' : g < 0 ? '−' : '') + Math.abs(g).toFixed(dec) + 'pp';
+  const applyGap = (id, g, dec) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = fmtGap(g, dec);
+    el.classList.remove('over', 'ok');
+    if (g != null) el.classList.add(g > 0 ? 'over' : 'ok');
+  };
+  applyGap('v2ManGapGeneral', weightedGap(v2Manualidad), 1);
+  applyGap('v2ManGapFric', weightedGap(v2Manualidad.filter(r => r.segmento === 'friccion')), 0);
+  applyGap('v2ManGapRuta', weightedGap(v2Manualidad.filter(r => r.segmento === 'ruta')), 0);
   // head
   const headHtml = '<tr><th>Cuenta</th>' +
     '<th class="num v2-tooltip" data-tooltip="Pedidos concurrentes por conductor (promedio). &gt;3 = ruta nativa.">AvgConc</th>' +

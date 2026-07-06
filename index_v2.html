@@ -2146,5 +2146,26 @@ INSERT INTO kanban_cards (title, workspace, assignee, category, motion, status, 
 
 ============================================================================
 -->
+<!-- Gate de acceso: clave compartida del equipo (hash SHA-256; cambiar GATE_HASH invalida sesiones guardadas) -->
+<div id="gateOverlay" style="position:fixed;inset:0;background:#fff;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-family:Montserrat,Arial,sans-serif">
+  <div style="width:64px;height:4px;background:#00b8eb;border-radius:2px"></div>
+  <h2 style="color:#314374;margin:0;font-size:20px">Kanban CS &mdash; Picker</h2>
+  <p style="color:#314374;margin:0;font-size:14px">Ingresa la clave de acceso del equipo</p>
+  <input id="gateInput" type="password" autocomplete="off" placeholder="Clave" style="padding:10px 14px;border:1px solid #c5cee0;border-radius:8px;font-size:15px;width:240px;text-align:center">
+  <button id="gateBtn" style="background:#008cff;color:#fff;border:none;border-radius:8px;padding:10px 28px;font-size:14px;font-weight:600;cursor:pointer">Entrar</button>
+  <p id="gateErr" style="color:#e74c3c;font-size:13px;margin:0;visibility:hidden">Clave incorrecta</p>
+</div>
+<script>
+(function(){
+  var GATE_HASH='78e985f076f3c05e5788b4cd33cb46b521080e98f2a7de0aee310246f2f24bce';
+  var ov=document.getElementById('gateOverlay'),inp=document.getElementById('gateInput'),btn=document.getElementById('gateBtn'),err=document.getElementById('gateErr');
+  if(localStorage.getItem('kanban_gate')===GATE_HASH){ov.remove();return;}
+  function sha256(s){return crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)).then(function(b){return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');});}
+  function check(){sha256(inp.value.trim()).then(function(h){if(h===GATE_HASH){localStorage.setItem('kanban_gate',GATE_HASH);ov.remove();}else{err.style.visibility='visible';inp.value='';inp.focus();}});}
+  btn.addEventListener('click',check);
+  inp.addEventListener('keydown',function(e){if(e.key==='Enter')check();});
+  inp.focus();
+})();
+</script>
 </body>
 </html>

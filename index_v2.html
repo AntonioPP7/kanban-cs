@@ -823,12 +823,28 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
       <h2>Expansión Top 40 — portafolio</h2>
       <div class="v2-sub" id="v2ExpansionSnapshotDate">Snapshot: —</div>
     </div>
+    <div class="v2-filters">
+      <select id="v2FilterExpAM" onchange="v2RenderExpansion()">
+        <option value="">Todos los AM</option>
+        <option value="Juan Xavier">Juan Xavier</option>
+        <option value="Carlos">Carlos</option>
+        <option value="__none__">Sin AM</option>
+      </select>
+      <select id="v2FilterExpSem" onchange="v2RenderExpansion()">
+        <option value="">Todo estado</option>
+        <option value="verde">Verde</option>
+        <option value="amarillo">Amarillo</option>
+        <option value="rojo">Rojo</option>
+        <option value="__alertas__">Con alertas rojas</option>
+      </select>
+    </div>
   </div>
   <div class="v2-kpi-row">
-    <div class="v2-kpi"><div class="v2-kpi-label">Mes anterior (cerrado)</div><div class="v2-kpi-value" id="v2ExpMayo">—</div><div class="v2-kpi-sub">rides Top 40</div></div>
+    <div class="v2-kpi"><div class="v2-kpi-label">Mes anterior (cerrado)</div><div class="v2-kpi-value" id="v2ExpMayo">—</div><div class="v2-kpi-sub" id="v2ExpMayoSub">rides Top 40</div></div>
     <div class="v2-kpi"><div class="v2-kpi-label">Proy. cierre mes</div><div class="v2-kpi-value" id="v2ExpProy">—</div><div class="v2-kpi-sub" id="v2ExpProySub">—</div></div>
     <div class="v2-kpi"><div class="v2-kpi-label">Crecimiento neto</div><div class="v2-kpi-value" id="v2ExpNeto">—</div><div class="v2-kpi-sub" id="v2ExpNetoSub">—</div></div>
-    <div class="v2-kpi"><div class="v2-kpi-label">Expanden / contraen</div><div class="v2-kpi-value" id="v2ExpSplit">—</div><div class="v2-kpi-sub">de 40 cuentas</div></div>
+    <div class="v2-kpi"><div class="v2-kpi-label">Expanden / contraen</div><div class="v2-kpi-value" id="v2ExpSplit">—</div><div class="v2-kpi-sub" id="v2ExpSplitSub">de 40 cuentas</div></div>
+    <div class="v2-kpi danger"><div class="v2-kpi-label">Alertas rojas</div><div class="v2-kpi-value" id="v2ExpAlertas">—</div><div class="v2-kpi-sub" id="v2ExpAlertasSub">—</div></div>
   </div>
   <div class="v2-table-wrap">
     <table class="v2-table" id="v2ExpansionTable">
@@ -836,6 +852,11 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
         <tr>
           <th>#</th>
           <th>Cuenta</th>
+          <th class="v2-tooltip" data-tooltip="Account Manager segun cs_owner_id del Hub. 'Sin AM' = cuenta sin CS owner asignado.">AM</th>
+          <th style="width:70px" class="v2-tooltip" data-tooltip="Verde >=8.8 | Amarillo 7.0-8.8 | Rojo <7.0 o sin data. Mismo criterio que la pestana Health Check.">Estado</th>
+          <th class="num v2-tooltip" data-tooltip="Healthscore (0-10) del ultimo dia completo. Fuente: gold.v_workspace_health.">Health</th>
+          <th class="num v2-tooltip" data-tooltip="Engagement score (0-10) del Hub: uso de la plataforma. Fuente: public.workspaces.latest_engagement.">Engag.</th>
+          <th class="num v2-tooltip" data-tooltip="Alertas criticas abiertas (severity=critical, status active/in_progress). Fuente: gold.workspace_alerts.">Alertas rojas</th>
           <th class="num">Mes ant</th>
           <th class="num">MTD</th>
           <th class="num v2-tooltip" data-tooltip="Numero grande = proy. cierre a ritmo 28d. Abajo = variacion a ritmo 7d.">Proy. cierre</th>
@@ -845,12 +866,13 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
         </tr>
       </thead>
       <tbody id="v2ExpansionBody">
-        <tr><td colspan="8" class="v2-empty">Cargando Top 40...</td></tr>
+        <tr><td colspan="13" class="v2-empty">Cargando Top 40...</td></tr>
       </tbody>
     </table>
   </div>
   <div class="v2-sub" style="padding:8px 0;line-height:1.6">
-    Top 40 por rides del mes anterior cerrado (excluye demo/test). Expansión = proy. cierre supera el mes anterior. Update diario 7:48 AM.
+    Top 40 por rides del mes anterior cerrado (excluye demo/test). Expansión = proy. cierre supera el mes anterior.
+    Las cuentas sin AM asignado en el Hub aparecen igual, agrupadas bajo "Sin AM". Los KPIs recalculan segun el filtro. Update diario 7:48 AM.
   </div>
 </div>
 

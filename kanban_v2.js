@@ -871,7 +871,7 @@ async function v2LoadExpansion() {
       .select('snapshot_date').order('snapshot_date', { ascending: false }).limit(1);
     if (e1) throw e1;
     if (!latest || !latest.length) {
-      v2SetHTML(body, '<tr><td colspan="8" class="v2-empty">Sin snapshot aun. El sync <code>expansion_top40</code> corre diario 7:48 AM.</td></tr>');
+      v2SetHTML(body, '<tr><td colspan="13" class="v2-empty">Sin snapshot aun. El sync <code>expansion_top40</code> corre diario 7:48 AM.</td></tr>');
       document.getElementById('v2ExpansionSnapshotDate').textContent = 'Snapshot: sin datos';
       v2Loaded.expansion = true; return;
     }
@@ -885,22 +885,58 @@ async function v2LoadExpansion() {
     document.getElementById('v2ExpansionSnapshotDate').textContent = 'Snapshot: ' + v2ExpansionSnapshotDate + corte;
     v2RenderExpansion();
   } catch (err) {
-    v2SetHTML(body, '<tr><td colspan="8" class="v2-empty">Error: ' + v2Esc(err.message) + '</td></tr>');
+    v2SetHTML(body, '<tr><td colspan="13" class="v2-empty">Error: ' + v2Esc(err.message) + '</td></tr>');
     console.error('[v2 expansion]', err);
   }
 }
 
+const V2_SEM_PILL = {
+  verde: '<span class="v2-pill v2-pill-verde">Verde</span>',
+  amarillo: '<span class="v2-pill v2-pill-amarillo">Amar.</span>',
+  rojo: '<span class="v2-pill v2-pill-rojo">Rojo</span>',
+};
+
+// Score 0-10 (health / engagement): color por umbral, mismo criterio que el semaforo.
+function v2ScoreCell(v) {
+  if (v == null) return '<span style="color:var(--neutral-800)">&mdash;</span>';
+  const n = Number(v);
+  const color = n >= 8.8 ? 'var(--verde-500)' : (n >= 7.0 ? '#b45309' : 'var(--rojo)');
+  return '<span style="font-weight:700;color:' + color + '">' + n.toFixed(2) + '</span>';
+}
+
+function v2AlertCell(n) {
+  const v = Number(n || 0);
+  if (!v) return '<span style="color:var(--neutral-800)">0</span>';
+  return '<span class="v2-pill v2-pill-rojo">' + v + '</span>';
+}
+
 function v2RenderExpansion() {
   const body = document.getElementById('v2ExpansionBody');
-  if (!v2Expansion.length) { v2SetHTML(body, '<tr><td colspan="8" class="v2-empty">Sin cuentas.</td></tr>'); return; }
-  const totMayo = v2Expansion.reduce((a, r) => a + (r.mes_ant || 0), 0);
-  const totProy = v2Expansion.reduce((a, r) => a + (r.proy_lenta || 0), 0);
-  const totProy7 = v2Expansion.reduce((a, r) => a + (r.proy_rapida || 0), 0);
+  if (!v2Expansion.length) { v2SetHTML(body, '<tr><td colspan="13" class="v2-empty">Sin cuentas.</td></tr>'); return; }
+
+  const fAM = (document.getElementById('v2FilterExpAM') || {}).value || '';
+  const fSem = (document.getElementById('v2FilterExpSem') || {}).value || '';
+  const rows = v2Expansion.filter(r => {
+    if (fAM === '__none__') { if (r.am_owner) return false; }
+    else if (fAM && r.am_owner !== fAM) return false;
+    if (fSem === '__alertas__') { if (!(r.alertas_criticas > 0)) return false; }
+    else if (fSem && r.semaforo !== fSem) return false;
+    return true;
+  });
+
+  const totMayo = rows.reduce((a, r) => a + (r.mes_ant || 0), 0);
+  const totProy = rows.reduce((a, r) => a + (r.proy_lenta || 0), 0);
+  const totProy7 = rows.reduce((a, r) => a + (r.proy_rapida || 0), 0);
   const neto = totProy - totMayo;
   const var7 = totProy7 - totProy;
-  const nUp = v2Expansion.filter(r => (r.delta || 0) > 0).length;
-  const nDown = v2Expansion.filter(r => (r.delta || 0) < 0).length;
+  const nUp = rows.filter(r => (r.delta || 0) > 0).length;
+  const nDown = rows.filter(r => (r.delta || 0) < 0).length;
+  const totAlertas = rows.reduce((a, r) => a + (r.alertas_criticas || 0), 0);
+  const nConAlertas = rows.filter(r => (r.alertas_criticas || 0) > 0).length;
+  const scope = fAM === '__none__' ? 'cuentas sin AM' : (fAM ? 'cartera ' + fAM : 'rides Top 40');
+
   document.getElementById('v2ExpMayo').textContent = totMayo.toLocaleString('en-US');
+  document.getElementById('v2ExpMayoSub').textContent = scope + ' · ' + rows.length + ' cuentas';
   document.getElementById('v2ExpProy').textContent = totProy.toLocaleString('en-US');
   document.getElementById('v2ExpProySub').textContent = (var7 >= 0 ? '▲ +' : '▼ −') + Math.abs(var7).toLocaleString('en-US') + ' a ritmo 7d';
   const netoEl = document.getElementById('v2ExpNeto');
@@ -909,14 +945,28 @@ function v2RenderExpansion() {
   const pctNeto = totMayo ? (neto / totMayo * 100) : 0;
   document.getElementById('v2ExpNetoSub').textContent = (pctNeto >= 0 ? '+' : '−') + Math.abs(pctNeto).toFixed(1) + '% vs mes ant';
   document.getElementById('v2ExpSplit').textContent = nUp + ' / ' + nDown;
-  const html = v2Expansion.map(r => {
+  document.getElementById('v2ExpSplitSub').textContent = 'de ' + rows.length + ' cuentas';
+  document.getElementById('v2ExpAlertas').textContent = totAlertas.toLocaleString('en-US');
+  document.getElementById('v2ExpAlertasSub').textContent = nConAlertas + ' de ' + rows.length + ' cuentas afectadas';
+
+  if (!rows.length) { v2SetHTML(body, '<tr><td colspan="13" class="v2-empty">Sin cuentas con ese filtro.</td></tr>'); return; }
+
+  const html = rows.map(r => {
     const neg = (r.delta || 0) < 0;
     const d = v2DeltaCell(r.delta);
     const pct = r.delta_pct == null ? '&mdash;' : '<span ' + d.cls + '>' + (r.delta_pct >= 0 ? '+' : '−') + Math.abs(Math.round(r.delta_pct * 100)) + '%</span>';
     const region = r.region ? ' <small>' + v2Esc(r.region) + '</small>' : '';
+    const am = r.am_owner
+      ? v2Esc(r.am_owner)
+      : '<span class="v2-pill v2-pill-gris">Sin AM</span>';
     return '<tr' + (neg ? ' style="background:#fdf6f5"' : '') + '>' +
       '<td>' + (r.rank || '—') + '</td>' +
       '<td class="v2-cliente">' + v2Esc(r.workspace_name) + region + '</td>' +
+      '<td>' + am + '</td>' +
+      '<td>' + (V2_SEM_PILL[r.semaforo] || '<span class="v2-pill v2-pill-gris">&mdash;</span>') + '</td>' +
+      '<td class="num">' + v2ScoreCell(r.healthscore) + '</td>' +
+      '<td class="num">' + v2ScoreCell(r.engagement_score) + '</td>' +
+      '<td class="num">' + v2AlertCell(r.alertas_criticas) + '</td>' +
       '<td class="num">' + v2Num(r.mes_ant) + '</td>' +
       '<td class="num">' + v2Num(r.mtd) + '</td>' +
       '<td class="num">' + v2ProyCell(r.proy_lenta, r.proy_rapida) + '</td>' +

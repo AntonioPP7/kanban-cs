@@ -899,15 +899,18 @@ function v2cQItem(r) {
     '<span class="qtext" contenteditable="true" onblur="v2CartSaveText(this,\'cartera_registro\',\'texto\')">' + v2Esc(r.texto) + '</span>' +
     v2cBar('cartera_registro', est, false, r.updated_at || r.created_at) + '</div>';
 }
-function v2cQList(items, tipo) {
-  const xs = items.filter(x => x.tipo === tipo && v2cVisible(x));
-  if (!xs.length) return '<span class="v2c-na">—</span>';
-  return xs.map(v2cQItem).join('');
+function v2cAddBtn(ws, tipo, isBloqueo) {
+  const fn = isBloqueo ? 'v2CartAddBloqueo(this,\'' + ws + '\')' : 'v2CartAddItem(this,\'' + ws + '\',\'' + tipo + '\')';
+  return '<button class="qbtn" style="margin-top:5px" onclick="' + fn + '">＋ ' + (isBloqueo ? 'agregar bloqueo' : 'agregar') + '</button>';
 }
-function v2cScrap(items) {
+function v2cQList(items, tipo, ws) {
+  const xs = items.filter(x => x.tipo === tipo && v2cVisible(x));
+  const body = xs.length ? xs.map(v2cQItem).join('') : '<span class="v2c-na">—</span>';
+  return body + v2cAddBtn(ws, tipo, false);
+}
+function v2cScrap(items, ws) {
   const xs = items.filter(x => x.tipo === 'scrapping' && v2cVisible(x));
-  if (!xs.length) return '<span class="v2c-na">—</span>';
-  return xs.map(r => {
+  const body = !xs.length ? '<span class="v2c-na">—</span>' : xs.map(r => {
     const est = r.estado || 'draft';
     const b = r.badge === 'hecho' ? 'hecho' : 'reco';
     return '<div class="qi ' + est + '" data-id="' + r.id + '">' +
@@ -916,11 +919,11 @@ function v2cScrap(items) {
       (r.why ? '<div style="font-size:9px;color:#8a7fae;margin-top:3px">' + v2Esc(r.why) + '</div>' : '') +
       v2cBar('cartera_registro', est, false, r.updated_at || r.created_at) + '</div>';
   }).join('');
+  return body + v2cAddBtn(ws, 'scrapping', false);
 }
-function v2cBloqs(items) {
+function v2cBloqs(items, ws) {
   const xs = items.filter(v2cVisible);
-  if (!xs.length) return '<span class="v2c-na">Sin bloqueos</span>';
-  return xs.map(b => {
+  const body = !xs.length ? '<span class="v2c-na">Sin bloqueos</span>' : xs.map(b => {
     const est = b.estado || 'draft';
     const es = b.estado_solucion || 'sin';
     const tipo = b.tipo === 'n' ? 'N' : 'C';
@@ -934,8 +937,9 @@ function v2cBloqs(items) {
       '<span class="qtext" contenteditable="true" onblur="v2CartSaveText(this,\'cartera_bloqueos\',\'solucion\')">' + v2Esc(b.solucion) + '</span></div>' +
       '<div class="bx-f"><b>' + v2Esc(b.responsable || '—') + '</b>' + (b.resp_externo ? ' · cliente' : '') +
       ' · ' + v2Esc(b.deadline || 'sin fecha') + ' ' + ped +
-      '<span style="margin-left:auto">' + v2cBar('cartera_bloqueos', est, true, b.updated_at || b.created_at).replace('qi-bar', 'qi-bar') + '</span></div></div>';
+      '<span style="margin-left:auto">' + v2cBar('cartera_bloqueos', est, true, b.updated_at || b.created_at) + '</span></div></div>';
   }).join('');
+  return body + v2cAddBtn(ws, null, true);
 }
 function v2cWa(ws, wa) {
   const fecha = wa && wa.ultimo_contacto ? wa.ultimo_contacto : '';
@@ -987,21 +991,37 @@ function v2RenderCartera() {
       '<td><span class="dias ' + v2cSem(dias) + '">' + (dias == null ? '—' : dias) + '</span></td>' +
       '<td class="l" style="font-size:10px">' + (p.proxima_reunion ? '<span style="color:#1b7a2e;font-weight:700">' + v2Esc(p.proxima_reunion) + '</span>' : '<span class="v2c-na">nada agendado</span>') + '</td>' +
       '<td class="pulso">' + v2cPulso(p) + '</td>' +
-      '<td class="l v2c-xtra"><div class="qwrap">' + v2cQList(a.reg, 'tema') + '</div></td>' +
-      '<td class="l v2c-xtra"><div class="qwrap">' + v2cQList(a.reg, 'hicimos') + '</div></td>' +
-      '<td class="l v2c-xtra"><div class="qwrap">' + v2cQList(a.reg, 'cliente') + '</div></td>' +
-      '<td class="l v2c-xtra">' + v2cBloqs(a.blo) + '</td>' +
-      '<td class="l v2c-xtra">' + v2cScrap(a.reg) + '</td>' +
+      '<td class="l v2c-xtra"><div class="qwrap">' + v2cQList(a.reg, 'tema', p.workspace_id) + '</div></td>' +
+      '<td class="l v2c-xtra"><div class="qwrap">' + v2cQList(a.reg, 'hicimos', p.workspace_id) + '</div></td>' +
+      '<td class="l v2c-xtra"><div class="qwrap">' + v2cQList(a.reg, 'cliente', p.workspace_id) + '</div></td>' +
+      '<td class="l v2c-xtra">' + v2cBloqs(a.blo, p.workspace_id) + '</td>' +
+      '<td class="l v2c-xtra">' + v2cScrap(a.reg, p.workspace_id) + '</td>' +
       '<td class="l v2c-xtra">' + v2cWa(p.workspace_id, a.wa) + '</td>' +
       '</tr>';
   }).join('');
   v2SetHTML(body, rows);
 
+  // ---- Objetivos (arriba de la tabla) ----
+  const setBar = (id, pct, ok) => { const el = document.getElementById(id); if (el) { el.style.width = Math.max(0, Math.min(pct, 100)).toFixed(0) + '%'; el.style.background = ok ? '#1b7a2e' : (pct >= 60 ? '#00b8eb' : '#a9760a'); } };
+  const set = (id, html) => { const el = document.getElementById(id); if (el) v2SetHTML(el, html); };
+  const crecR = T.rp - T.rj, metaR = 2500, pR = crecR / metaR * 100, okR = crecR >= metaR;
+  set('v2cObjRidesVal', (crecR >= 0 ? '+' : '−') + v2Num(Math.abs(crecR)) + ' <small>/ +' + v2Num(metaR) + ' rides</small>');
+  setBar('v2cObjRidesBar', pR, okR);
+  set('v2cObjRidesSub', okR
+    ? '<span style="color:#1b7a2e">✓ CUMPLE (' + pR.toFixed(0) + '%)</span>'
+    : '<span style="color:#a9760a">' + pR.toFixed(0) + '% · faltan ' + v2Num(metaR - crecR) + ' rides</span>');
+  const nuevoRev = T.vp - T.vj, metaV = 180000, pV = nuevoRev / metaV * 100, okV = nuevoRev >= metaV;
+  set('v2cObjRevVal', (nuevoRev >= 0 ? '+' : '−') + '$' + v2Num(Math.abs(Math.round(nuevoRev))) + ' <small>/ +$' + v2Num(metaV) + ' nuevos</small>');
+  setBar('v2cObjRevBar', pV, okV);
+  set('v2cObjRevSub', okV
+    ? '<span style="color:#1b7a2e">✓ CUMPLE</span>'
+    : '<span style="color:#c0392b">' + pV.toFixed(0) + '% · faltan $' + v2Num(Math.round(metaV - nuevoRev)) + '</span> <span style="color:#8a96aa;font-weight:600">· base jun $' + v2Num(Math.round(T.vj)) + '</span>');
+
   const capT = T.pot ? T.vp / T.pot * 100 : 0;
   v2SetHTML(foot, '<tr>' +
     '<td class="s0"></td><td class="s1 l">TOTAL · ' + v2CartAccts.length + ' cuentas</td>' +
     '<td>' + v2Num(T.rj) + '</td><td>' + v2Num(T.rp) + '</td>' +
-    '<td>$' + v2Num(Math.round(T.vj)) + '</td><td>$' + v2Num(Math.round(T.vp)) + '</td><td></td>' +
+    '<td>$' + v2Num(Math.round(T.vj)) + '</td><td>$' + v2Num(Math.round(T.vp)) + '</td><td>' + v2cDelta(T.vp - T.vj) + '</td>' +
     '<td></td><td></td><td></td>' +
     '<td>' + v2Num(T.techo) + '</td><td></td><td>$' + v2Num(Math.round(T.pot)) + '</td>' +
     '<td><span style="color:#0d6b8c">$' + v2Num(Math.round(T.gan)) + '</span> <span style="font-size:9px">' + capT.toFixed(1) + '%</span></td>' +
@@ -1036,6 +1056,34 @@ async function v2CartEstado(btn, table, estado) {
     }
     v2RenderCartera();
   } catch (err) { alert('Error: ' + err.message); console.error(err); }
+}
+// crear item cualitativo manual (lo autora el AM -> confirmado, origen manual)
+async function v2CartAddItem(btn, ws, tipo) {
+  const now = new Date().toISOString();
+  const row = { workspace_id: ws, tipo: tipo, texto: '', estado: 'confirmado', origen: 'manual',
+    slug: 'manual-' + Date.now() + '-' + Math.floor(Math.random() * 9999), updated_by: 'AM', updated_at: now };
+  try {
+    const { data, error } = await sb.from('cartera_registro').insert(row).select();
+    if (error) throw error;
+    const rec = data[0];
+    for (const a of v2CartAccts) if (a.p.workspace_id === ws) { a.reg.push(rec); break; }
+    v2RenderCartera();
+    setTimeout(() => { const el = document.querySelector('.qi[data-id="' + rec.id + '"] .qtext'); if (el) el.focus(); }, 60);
+  } catch (err) { alert('Error creando: ' + err.message); console.error(err); }
+}
+async function v2CartAddBloqueo(btn, ws) {
+  const now = new Date().toISOString();
+  const row = { workspace_id: ws, slug: 'manual-' + Date.now() + '-' + Math.floor(Math.random() * 9999),
+    tipo: 'n', bloqueo: '', solucion: '', estado_solucion: 'definida', responsable: '', resp_externo: false,
+    deadline: 'sin fecha', estado: 'confirmado', origen: 'manual', updated_by: 'AM', updated_at: now };
+  try {
+    const { data, error } = await sb.from('cartera_bloqueos').insert(row).select();
+    if (error) throw error;
+    const rec = data[0];
+    for (const a of v2CartAccts) if (a.p.workspace_id === ws) { a.blo.push(rec); break; }
+    v2RenderCartera();
+    setTimeout(() => { const el = document.querySelector('.bx[data-id="' + rec.id + '"] .qtext'); if (el) el.focus(); }, 60);
+  } catch (err) { alert('Error creando: ' + err.message); console.error(err); }
 }
 async function v2CartSaveWa(el, ws, which) {
   const payload = { workspace_id: ws, updated_by: 'AM', updated_at: new Date().toISOString() };

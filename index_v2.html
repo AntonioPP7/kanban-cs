@@ -776,43 +776,138 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
   </div>
 </div>
 
-<!-- V2 View: Cartera 2500 -->
+<!-- V2 View: Cartera 2500 (v2 — editable) -->
 <div id="view-cartera" class="v2-view">
-  <div class="v2-toolbar">
-    <div>
-      <h2>Cartera 2500 — rollouts en rampa</h2>
-      <div class="v2-sub" id="v2CarteraSnapshotDate">Snapshot: —</div>
+  <style>
+  #view-cartera .v2c-ctrl{display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+  #view-cartera .v2c-seg{display:flex;border:1px solid var(--grid,#d3dbe6);border-radius:6px;overflow:hidden;background:#fff}
+  #view-cartera .v2c-seg button{padding:7px 20px;font-size:12.5px;font-weight:700;border:0;background:#fff;color:#7b88a0;cursor:pointer}
+  #view-cartera .v2c-seg button+button{border-left:1px solid var(--grid,#d3dbe6)}
+  #view-cartera .v2c-seg button.on{background:#314374;color:#fff}
+  #view-cartera .v2c-hint{font-size:11.5px;color:#6b7a96;line-height:1.5}
+  #view-cartera .v2c-hint b{color:#314374}
+  #view-cartera .v2c-shell{background:#fff;border:1px solid var(--grid,#d3dbe6)}
+  #view-cartera .v2c-tw{overflow:auto;max-height:calc(100vh - 250px)}
+  #view-cartera table.v2c{border-collapse:separate;border-spacing:0;font-size:11.5px;font-variant-numeric:tabular-nums;color:#314374}
+  #view-cartera table.v2c th,#view-cartera table.v2c td{border-right:1px solid #d3dbe6;border-bottom:1px solid #d3dbe6}
+  #view-cartera table.v2c thead th{background:#dfe7f1;color:#314374;font-weight:700;padding:0 7px;text-align:right;font-size:10.5px;white-space:nowrap;position:sticky;top:22px;z-index:20;height:34px;border-bottom:2px solid #9fb1cc}
+  #view-cartera table.v2c thead th.l{text-align:left}
+  #view-cartera table.v2c thead tr.grp th{background:#314374;color:#fff;font-size:9.5px;letter-spacing:.5px;text-transform:uppercase;text-align:center;top:0;height:22px;z-index:21;border-bottom:1px solid #46578a;padding:0}
+  #view-cartera table.v2c th.s0,#view-cartera table.v2c td.s0{position:sticky;left:0;width:30px;min-width:30px;text-align:center}
+  #view-cartera table.v2c th.s1,#view-cartera table.v2c td.s1{position:sticky;left:30px;min-width:150px;box-shadow:2px 0 4px rgba(49,67,116,.12)}
+  #view-cartera table.v2c thead th.s0,#view-cartera table.v2c thead th.s1{z-index:30;background:#dfe7f1}
+  #view-cartera table.v2c thead tr.grp th.s0,#view-cartera table.v2c thead tr.grp th.s1{z-index:41;background:#314374}
+  #view-cartera table.v2c tbody td.s0{background:#eef2f7;color:#8a96aa;font-weight:700;font-size:10px;z-index:10}
+  #view-cartera table.v2c tbody td.s1{background:#fff;z-index:10;border-right:2px solid #00b8eb}
+  #view-cartera table.v2c tbody td{padding:5px 7px;text-align:right;vertical-align:top;line-height:1.4}
+  #view-cartera table.v2c tbody td.l{text-align:left}
+  #view-cartera table.v2c tbody tr:hover{background:#f7fbfe}
+  #view-cartera .v2c-cta{font-weight:700;font-size:12.5px;display:block;line-height:1.2}
+  #view-cartera .v2c-am{font-size:9.5px;color:#8a96aa;font-weight:600}
+  #view-cartera .pos{color:#1b7a2e;font-weight:700}#view-cartera .negv{color:#c0392b;font-weight:700}#view-cartera .zero{color:#a8b3c4}
+  #view-cartera .v2c-na{color:#c2cbd8}
+  #view-cartera td.vp{background:#f0fafe}#view-cartera td.tch{background:#f4fafd}#view-cartera td.gan{background:#eaf6fb}
+  #view-cartera .gan .n{font-weight:800;color:#0d6b8c;font-size:13px}
+  #view-cartera td.pulso{background:#f6f9fc;border-left:2px solid #dde7f0;min-width:120px}
+  #view-cartera .pl{display:flex;align-items:center;gap:5px;line-height:1.5}
+  #view-cartera .pl .k{color:#8a96aa;font-weight:700;font-size:9px;width:44px;flex-shrink:0;text-align:left;text-transform:uppercase}
+  #view-cartera .pl .v{font-weight:800;font-size:12px;width:26px;text-align:right;flex-shrink:0}
+  #view-cartera .pl .v.hi{color:#1b7a2e}#view-cartera .pl .v.md{color:#a9760a}#view-cartera .pl .v.lo{color:#c0392b}#view-cartera .pl .v.na{color:#c2cbd8}
+  #view-cartera .dias{font-weight:800}#view-cartera .dias.g{color:#1b7a2e}#view-cartera .dias.a{color:#a9760a}#view-cartera .dias.r{color:#c0392b}
+  #view-cartera .v2c-ger .v2c-xtra{display:none}
+  #view-cartera ol.mini{margin:0;padding-left:15px}#view-cartera ul.plain{list-style:none;margin:0;padding:0}
+  #view-cartera .qi{position:relative;margin-bottom:6px;font-size:10.5px;line-height:1.4;padding:4px 6px;border-radius:5px;border:1px solid transparent}
+  #view-cartera .qi.draft{background:#fff9ec;border-color:#f0e2c0}
+  #view-cartera .qi.confirmado{background:#eef7f0;border-color:#cfe8d5}
+  #view-cartera .qi.descartado{opacity:.45;text-decoration:line-through}
+  #view-cartera .qi ol,#view-cartera .qi ul{margin:0}
+  #view-cartera .qtext{outline:none}
+  #view-cartera .qtext:focus{background:#fffef8;box-shadow:0 0 0 2px #00b8eb55;border-radius:3px}
+  #view-cartera .qi-bar{display:flex;gap:4px;margin-top:4px;align-items:center}
+  #view-cartera .qbtn{font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;border:1px solid #d3dbe6;background:#fff;color:#4a5b85;cursor:pointer;text-transform:uppercase;letter-spacing:.3px}
+  #view-cartera .qbtn.ok{background:#1b7a2e;color:#fff;border-color:#1b7a2e}
+  #view-cartera .qbtn.no{color:#c0392b}
+  #view-cartera .qbadge{font-size:8px;font-weight:800;padding:1px 5px;border-radius:7px}
+  #view-cartera .qbadge.draft{background:#fdf3dc;color:#a9760a}#view-cartera .qbadge.confirmado{background:#e3f5e8;color:#1b7a2e}#view-cartera .qbadge.resuelto{background:#e3f5e8;color:#1b7a2e}#view-cartera .qbadge.descartado{background:#f1f4f8;color:#9aa6b8}#view-cartera .qbadge.ia{background:#efe9fd;color:#6b46c1}
+  #view-cartera .qi.resuelto{background:#eef7f0;border-color:#cfe8d5}#view-cartera .bx.resuelto{border-color:#cfe8d5}
+  #view-cartera .qage{font-size:8.5px;color:#9aa6b8;font-weight:700;margin-left:4px;white-space:nowrap}
+  #view-cartera .badge{display:inline-block;padding:1px 6px;border-radius:9px;font-size:8.5px;font-weight:800}
+  #view-cartera .badge.hecho{background:#e3f5e8;color:#1b7a2e}#view-cartera .badge.reco{background:#efe9fd;color:#6b46c1}
+  #view-cartera .bx{border:1px solid #e8d9d6;border-radius:5px;margin-bottom:6px;background:#fffdfd;overflow:hidden}
+  #view-cartera .bx.draft{border-color:#f0e2c0}#view-cartera .bx.confirmado{border-color:#cfe8d5}#view-cartera .bx.descartado{opacity:.45}
+  #view-cartera .bx-h{padding:4px 7px;background:#fdf3f2;display:flex;gap:4px;align-items:flex-start}
+  #view-cartera .bx-h .txt{font-size:10px;font-weight:700;line-height:1.3;color:#7a3a34;text-align:left}
+  #view-cartera .bx-s{padding:4px 7px;font-size:10px;line-height:1.35;color:#4a5b85;text-align:left;border-top:1px solid #f5eae8}
+  #view-cartera .bx-f{display:flex;align-items:center;gap:6px;padding:3px 7px;background:#fafcff;border-top:1px solid #eef2f7;flex-wrap:wrap;font-size:10px}
+  #view-cartera .tchip{width:15px;height:15px;border-radius:4px;color:#fff;font-size:8.5px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  #view-cartera .tchip.tn{background:#008cff}#view-cartera .tchip.tc{background:#f7d9a8;color:#7a5310}
+  #view-cartera .estchip{padding:1px 6px;border-radius:8px;font-size:8px;font-weight:800;flex-shrink:0}
+  #view-cartera .est-andando{background:#e3f5e8;color:#1b7a2e}#view-cartera .est-definida{background:#dbeafe;color:#1e40af}#view-cartera .est-ia{background:#efe9fd;color:#6b46c1}#view-cartera .est-sin{background:#fbe6e3;color:#c0392b}#view-cartera .est-resuelto{background:#e3f5e8;color:#1b7a2e}
+  #view-cartera .wa{display:flex;gap:5px;align-items:center;font-size:10px}
+  #view-cartera .wa-nota{outline:none;min-width:80px;border-bottom:1px dashed #c7d0dd;padding:1px 3px}
+  #view-cartera .wa-nota:focus{background:#fffef8}
+  #view-cartera tfoot td{position:sticky;bottom:0;background:#dfe7f1;font-weight:800;padding:7px;text-align:right;border-top:2px solid #00b8eb;z-index:15}
+  #view-cartera tfoot td.l{text-align:left}#view-cartera tfoot td.s0{left:0;z-index:25}#view-cartera tfoot td.s1{left:30px;z-index:25}
+  #view-cartera .v2c-saved{animation:v2cflash .9s}
+  @keyframes v2cflash{0%{background:#d3f5dd}100%{background:transparent}}
+  </style>
+
+  <div class="v2-toolbar"><div>
+    <h2>Cartera 2500 — rollouts en rampa</h2>
+    <div class="v2-sub" id="v2CarteraSnapshotDate">Snapshot: —</div>
+  </div></div>
+
+  <div class="v2c-ctrl">
+    <div class="v2c-seg">
+      <button id="v2cBtnGer" class="on" onclick="v2CartMode('ger')">Gerencial</button>
+      <button id="v2cBtnCom" onclick="v2CartMode('com')">Completa</button>
     </div>
+    <span class="v2c-hint" id="v2cHint"><b>Gerencial:</b> volumen, valor por pedido, techo y contacto. Una línea por cuenta.</span>
+    <label style="font-size:11.5px;color:#4a5b85;display:flex;align-items:center;gap:5px;margin-left:auto;cursor:pointer">
+      <input type="checkbox" id="v2cHistChk" onchange="v2CartToggleHist(this.checked)"> Mostrar histórico (resueltos/descartados)
+    </label>
   </div>
-  <div class="v2-kpi-row">
-    <div class="v2-kpi"><div class="v2-kpi-label">Mes anterior (cerrado)</div><div class="v2-kpi-value" id="v2CarteraMayo">—</div><div class="v2-kpi-sub">rides baseline</div></div>
-    <div class="v2-kpi"><div class="v2-kpi-label">Proy. cierre mes</div><div class="v2-kpi-value" id="v2CarteraProy">—</div><div class="v2-kpi-sub" id="v2CarteraProySub">—</div></div>
-    <div class="v2-kpi"><div class="v2-kpi-label">Crecimiento proyectado</div><div class="v2-kpi-value" id="v2CarteraCrec">—</div><div class="v2-kpi-sub">objetivo +2,500/mes</div></div>
-    <div class="v2-kpi" id="v2CarteraGapKpi"><div class="v2-kpi-label">Brecha vs objetivo</div><div class="v2-kpi-value" id="v2CarteraGap">—</div><div class="v2-kpi-sub">+2,500 agregado</div></div>
-  </div>
-  <div class="v2-table-wrap">
-    <table class="v2-table" id="v2CarteraTable">
+
+  <div class="v2c-shell"><div class="v2c-tw">
+    <table class="v2c" id="v2CarteraTable">
       <thead>
+        <tr class="grp">
+          <th class="s0" rowspan="2">#</th>
+          <th class="s1" rowspan="2">Cuenta</th>
+          <th colspan="2">Rides</th>
+          <th colspan="3">Revenue USD</th>
+          <th colspan="3">Valor por pedido</th>
+          <th colspan="4">Techo y upside</th>
+          <th colspan="4">Contacto</th>
+          <th class="v2c-xtra" colspan="3">Registro de actividad</th>
+          <th class="v2c-xtra" colspan="1">Bloqueo → solución</th>
+          <th class="v2c-xtra" colspan="1">Scrapping</th>
+          <th class="v2c-xtra" colspan="1">WhatsApp</th>
+        </tr>
         <tr>
-          <th>#</th>
-          <th>Cuenta</th>
-          <th>País</th>
-          <th class="num v2-tooltip" data-tooltip="Techo de envios/mes del cliente (public.workspace_settings) menos rides Picker del mes anterior = upside por capturar. Abajo, el techo registrado.">Dist. Techo</th>
-          <th class="num">Mes ant</th>
-          <th class="num">MTD</th>
-          <th class="num v2-tooltip" data-tooltip="Numero grande = proy. cierre a ritmo 28d. Abajo = variacion si se mantiene el ritmo 7d.">Proy. cierre</th>
-          <th class="num">Crecim.</th>
-          <th class="num">Crec. %</th>
-          <th>Tend.</th>
+          <th>Mes ant</th><th>Proy.</th>
+          <th>Mes ant</th><th>Proy.</th><th>Δ $</th>
+          <th>Mes ant</th><th>Proy.</th><th>Δ %</th>
+          <th>Techo</th><th>Dist.</th><th>Potencial</th><th>Por ganar</th>
+          <th class="l">Últ.</th><th>Días</th><th class="l">Próxima</th><th class="l">★ Pulso 90d</th>
+          <th class="l v2c-xtra" style="min-width:230px">Top temas</th>
+          <th class="l v2c-xtra" style="min-width:200px">Qué hicimos</th>
+          <th class="l v2c-xtra" style="min-width:200px">Qué hizo el cliente</th>
+          <th class="l v2c-xtra" style="min-width:320px">Bloqueo · solución · resp. · deadline</th>
+          <th class="l v2c-xtra" style="min-width:270px">Scrapping</th>
+          <th class="l v2c-xtra" style="min-width:150px">Contacto manual</th>
         </tr>
       </thead>
-      <tbody id="v2CarteraBody">
-        <tr><td colspan="10" class="v2-empty">Cargando cartera...</td></tr>
-      </tbody>
+      <tbody id="v2CarteraBody"><tr><td colspan="17" class="v2-empty">Cargando cartera...</td></tr></tbody>
+      <tfoot id="v2CarteraFoot"></tfoot>
     </table>
-  </div>
+  </div></div>
+
   <div class="v2-sub" style="padding:8px 0;line-height:1.6">
-    Rides = bookings COMPLETED. Objetivo +2,500 = crecimiento AGREGADO de la cartera (Σ proy − Σ mes ant). Techo de <b>public.workspace_settings</b>. Update diario 7:47 AM.
+    <b>Números data-driven desde el DW</b> (rides = bookings COMPLETED; revenue = <code>cfo.base_maestra_mat</code>). No se editan a mano.
+    <b>Temas, bloqueos y scrapping</b> los pre-llena la IA como <b>borrador</b>: el AM los <b>Aprueba / Edita / Descarta</b> en vivo (se guardan al instante).
+    <b>Potencial</b> = techo × valor por pedido proyectado. <b>Por ganar</b> = potencial − revenue proy.
+    <b>Pulso 90d</b> = reuniones cliente + hilos de email (piso: solo buzón de Antonio). Update diario 7:47 AM.
   </div>
 </div>
 
@@ -2179,7 +2274,7 @@ INSERT INTO kanban_cards (title, workspace, assignee, category, motion, status, 
 </div>
 <script>
 (function(){
-  var GATE_HASH='78e985f076f3c05e5788b4cd33cb46b521080e98f2a7de0aee310246f2f24bce';
+  var GATE_HASH='f9c001a78e1784cacee75d304f8bfd5f17810b6c7dbd21fe05c1cc186090f90b';
   var ov=document.getElementById('gateOverlay'),inp=document.getElementById('gateInput'),btn=document.getElementById('gateBtn'),err=document.getElementById('gateErr');
   if(localStorage.getItem('kanban_gate')===GATE_HASH){ov.remove();return;}
   function sha256(s){return crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)).then(function(b){return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');});}

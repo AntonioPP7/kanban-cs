@@ -796,69 +796,256 @@ function v2TendPill(d) {
 // ============================================================
 // CARTERA 2500
 // ============================================================
+// v2 Cartera 2500 editable — une 5 tablas (cartera_2500 rides + cartera_pulso revenue/contacto
+// + cartera_registro + cartera_bloqueos + cartera_whatsapp). Numeros read-only; cualitativo editable.
+let v2CartAccts = [];
+let v2cShowHist = false;
+
+function v2CartToggleHist(on) { v2cShowHist = on; v2RenderCartera(); }
+
+// "hoy" / "hace Nd" / "DD-mmm" desde un timestamp ISO
+function v2cAge(ts) {
+  if (!ts) return '';
+  const d = Math.floor((Date.now() - new Date(ts).getTime()) / 86400000);
+  if (d <= 0) return 'hoy';
+  if (d === 1) return 'ayer';
+  if (d < 30) return 'hace ' + d + 'd';
+  const dt = new Date(ts), M = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  return dt.getDate() + '-' + M[dt.getMonth()];
+}
+// barra estado-aware (draft/confirmado/descartado/resuelto). isBloqueo agrega "Resuelto".
+function v2cBar(table, estado, isBloqueo, ts) {
+  const lbl = { draft: 'DRAFT', confirmado: '✓ APROBADO', descartado: 'DESCARTADO', resuelto: '✓ RESUELTO' }[estado] || estado.toUpperCase();
+  let btns = '';
+  if (estado === 'draft') btns += '<button class="qbtn ok" onclick="v2CartEstado(this,\'' + table + '\',\'confirmado\')">Aprobar</button>';
+  if (estado === 'draft' || estado === 'confirmado') {
+    if (isBloqueo) btns += '<button class="qbtn" onclick="v2CartEstado(this,\'' + table + '\',\'resuelto\')">Resuelto</button>';
+    btns += '<button class="qbtn no" onclick="v2CartEstado(this,\'' + table + '\',\'descartado\')">Descartar</button>';
+  }
+  if (estado === 'descartado' || estado === 'resuelto') btns = '<button class="qbtn" onclick="v2CartEstado(this,\'' + table + '\',\'draft\')">Restaurar</button>';
+  const age = ts ? '<span class="qage">' + v2cAge(ts) + '</span>' : '';
+  return '<div class="qi-bar"><span class="qbadge ' + estado + '">' + lbl + '</span>' + age + btns + '</div>';
+}
+function v2cVisible(x) { return v2cShowHist || (x.estado !== 'descartado' && x.estado !== 'resuelto'); }
+
 async function v2LoadCartera() {
   const body = document.getElementById('v2CarteraBody');
+  const table = document.getElementById('v2CarteraTable');
+  if (table) table.classList.add('v2c-ger');
   try {
-    const { data: latest, error: e1 } = await sb.from('cartera_2500')
-      .select('snapshot_date').order('snapshot_date', { ascending: false }).limit(1);
-    if (e1) throw e1;
-    if (!latest || !latest.length) {
-      v2SetHTML(body, '<tr><td colspan="10" class="v2-empty">Sin snapshot aun. El sync <code>cartera_2500</code> corre diario 7:47 AM.</td></tr>');
+    const pd = await sb.from('cartera_pulso').select('snapshot_date').order('snapshot_date', { ascending: false }).limit(1);
+    if (pd.error) throw pd.error;
+    if (!pd.data || !pd.data.length) {
+      v2SetHTML(body, '<tr><td colspan="24" class="v2-empty">Sin snapshot de pulso aun. Corre <code>sync_cartera_actividad.py</code>.</td></tr>');
       document.getElementById('v2CarteraSnapshotDate').textContent = 'Snapshot: sin datos';
       v2Loaded.cartera = true; return;
     }
-    v2CarteraSnapshotDate = latest[0].snapshot_date;
-    const { data, error } = await sb.from('cartera_2500')
-      .select('*').eq('snapshot_date', v2CarteraSnapshotDate).order('rank', { ascending: true });
-    if (error) throw error;
-    v2Cartera = data || [];
+    const snap = pd.data[0].snapshot_date;
+    const rd = await sb.from('cartera_2500').select('snapshot_date').order('snapshot_date', { ascending: false }).limit(1);
+    const ridesSnap = (rd.data && rd.data.length) ? rd.data[0].snapshot_date : null;
+
+    const [pulso, rides, reg, blo, wa] = await Promise.all([
+      sb.from('cartera_pulso').select('*').eq('snapshot_date', snap),
+      ridesSnap ? sb.from('cartera_2500').select('*').eq('snapshot_date', ridesSnap) : Promise.resolve({ data: [] }),
+      sb.from('cartera_registro').select('*').order('tipo').order('seq'),
+      sb.from('cartera_bloqueos').select('*').order('id'),
+      sb.from('cartera_whatsapp').select('*'),
+    ]);
+    for (const r of [pulso, rides, reg, blo, wa]) if (r.error) throw r.error;
+
+    const ridesBy = {}; (rides.data || []).forEach(r => ridesBy[r.workspace_id] = r);
+    const waBy = {}; (wa.data || []).forEach(r => waBy[r.workspace_id] = r);
+    const regBy = {}; (reg.data || []).forEach(r => { (regBy[r.workspace_id] = regBy[r.workspace_id] || []).push(r); });
+    const bloBy = {}; (blo.data || []).forEach(r => { (bloBy[r.workspace_id] = bloBy[r.workspace_id] || []).push(r); });
+
+    v2CartAccts = (pulso.data || []).map(p => ({
+      p, rides: ridesBy[p.workspace_id] || {}, wa: waBy[p.workspace_id] || null,
+      reg: regBy[p.workspace_id] || [], blo: bloBy[p.workspace_id] || [],
+    })).sort((a, b) => (b.p.rev_proy || 0) - (a.p.rev_proy || 0));
+
     v2Loaded.cartera = true;
-    const corte = v2Cartera[0] && v2Cartera[0].corte_date ? ' · corte ' + v2Cartera[0].corte_date : '';
-    document.getElementById('v2CarteraSnapshotDate').textContent = 'Snapshot: ' + v2CarteraSnapshotDate + corte;
+    const corte = pulso.data[0] && pulso.data[0].corte_revenue ? ' · revenue corte ' + pulso.data[0].corte_revenue : '';
+    document.getElementById('v2CarteraSnapshotDate').textContent = 'Snapshot: ' + snap + corte;
     v2RenderCartera();
   } catch (err) {
-    v2SetHTML(body, '<tr><td colspan="10" class="v2-empty">Error: ' + v2Esc(err.message) + '</td></tr>');
+    v2SetHTML(body, '<tr><td colspan="24" class="v2-empty">Error: ' + v2Esc(err.message) + '</td></tr>');
     console.error('[v2 cartera]', err);
   }
 }
 
+function v2CartMode(m) {
+  const table = document.getElementById('v2CarteraTable');
+  const ger = m === 'ger';
+  table.classList.toggle('v2c-ger', ger);
+  document.getElementById('v2cBtnGer').classList.toggle('on', ger);
+  document.getElementById('v2cBtnCom').classList.toggle('on', !ger);
+  document.getElementById('v2cHint').innerHTML = ger
+    ? '<b>Gerencial:</b> volumen, valor por pedido, techo y contacto. Una línea por cuenta.'
+    : '<b>Completa:</b> lo mismo + temas, actividad, bloqueos y scrapping. El AM edita, aprueba y descarta cada nota en vivo.';
+}
+
+function v2cLvl(v, hi, lo) { return v == null ? 'na' : v >= hi ? 'hi' : v <= lo ? 'lo' : 'md'; }
+function v2cUSD(v) { return v == null ? '<span class="v2c-na">—</span>' : '$' + Number(v).toLocaleString('en-US'); }
+function v2cDelta(v) {
+  if (v == null || v === 0) return '<span class="zero">0</span>';
+  return '<span class="' + (v > 0 ? 'pos' : 'negv') + '">' + (v > 0 ? '+' : '−') + Math.abs(Math.round(v)).toLocaleString('en-US') + '</span>';
+}
+function v2cSem(d) { return d == null ? '' : d <= 14 ? 'g' : d <= 45 ? 'a' : 'r'; }
+
+// item cualitativo editable (tema/hicimos/cliente)
+function v2cQItem(r) {
+  const est = r.estado || 'draft';
+  return '<div class="qi ' + est + '" data-id="' + r.id + '">' +
+    '<span class="qtext" contenteditable="true" onblur="v2CartSaveText(this,\'cartera_registro\',\'texto\')">' + v2Esc(r.texto) + '</span>' +
+    v2cBar('cartera_registro', est, false, r.updated_at || r.created_at) + '</div>';
+}
+function v2cQList(items, tipo) {
+  const xs = items.filter(x => x.tipo === tipo && v2cVisible(x));
+  if (!xs.length) return '<span class="v2c-na">—</span>';
+  return xs.map(v2cQItem).join('');
+}
+function v2cScrap(items) {
+  const xs = items.filter(x => x.tipo === 'scrapping' && v2cVisible(x));
+  if (!xs.length) return '<span class="v2c-na">—</span>';
+  return xs.map(r => {
+    const est = r.estado || 'draft';
+    const b = r.badge === 'hecho' ? 'hecho' : 'reco';
+    return '<div class="qi ' + est + '" data-id="' + r.id + '">' +
+      '<span class="badge ' + b + '">' + (b === 'hecho' ? 'HECHO' : 'RECOMENDADO') + '</span> ' +
+      '<span class="qtext" contenteditable="true" onblur="v2CartSaveText(this,\'cartera_registro\',\'texto\')">' + v2Esc(r.texto) + '</span>' +
+      (r.why ? '<div style="font-size:9px;color:#8a7fae;margin-top:3px">' + v2Esc(r.why) + '</div>' : '') +
+      v2cBar('cartera_registro', est, false, r.updated_at || r.created_at) + '</div>';
+  }).join('');
+}
+function v2cBloqs(items) {
+  const xs = items.filter(v2cVisible);
+  if (!xs.length) return '<span class="v2c-na">Sin bloqueos</span>';
+  return xs.map(b => {
+    const est = b.estado || 'draft';
+    const es = b.estado_solucion || 'sin';
+    const tipo = b.tipo === 'n' ? 'N' : 'C';
+    const ped = b.pedidos_bloqueados != null
+      ? '<span class="ped">' + v2Num(b.pedidos_bloqueados) + ' pedidos</span>'
+      : (b.pedidos_label ? '<span style="color:#9aa6b8">' + v2Esc(b.pedidos_label) + '</span>' : '');
+    return '<div class="bx ' + est + '" data-id="' + b.id + '">' +
+      '<div class="bx-h"><span class="tchip ' + (tipo === 'N' ? 'tn' : 'tc') + '">' + tipo + '</span>' +
+      '<span class="txt qtext" contenteditable="true" onblur="v2CartSaveText(this,\'cartera_bloqueos\',\'bloqueo\')">' + v2Esc(b.bloqueo) + '</span></div>' +
+      '<div class="bx-s"><span class="estchip est-' + es + '">' + es.toUpperCase() + '</span> ' +
+      '<span class="qtext" contenteditable="true" onblur="v2CartSaveText(this,\'cartera_bloqueos\',\'solucion\')">' + v2Esc(b.solucion) + '</span></div>' +
+      '<div class="bx-f"><b>' + v2Esc(b.responsable || '—') + '</b>' + (b.resp_externo ? ' · cliente' : '') +
+      ' · ' + v2Esc(b.deadline || 'sin fecha') + ' ' + ped +
+      '<span style="margin-left:auto">' + v2cBar('cartera_bloqueos', est, true, b.updated_at || b.created_at).replace('qi-bar', 'qi-bar') + '</span></div></div>';
+  }).join('');
+}
+function v2cWa(ws, wa) {
+  const fecha = wa && wa.ultimo_contacto ? wa.ultimo_contacto : '';
+  const nota = wa && wa.nota ? wa.nota : '';
+  return '<div class="wa"><input type="date" value="' + v2Esc(fecha) + '" onchange="v2CartSaveWa(this,\'' + ws + '\',\'fecha\')" ' +
+    'style="font-size:10px;border:1px solid #d3dbe6;border-radius:4px;padding:1px 3px">' +
+    '<span class="wa-nota" contenteditable="true" onblur="v2CartSaveWa(this,\'' + ws + '\',\'nota\')">' + v2Esc(nota) + '</span></div>';
+}
+function v2cPulso(p) {
+  const reu = p.reuniones_cliente_90d, em = p.email_hilos_90d, tope = p.email_tope;
+  const lr = v2cLvl(reu, 8, 4), le = v2cLvl(em, 10, 3);
+  const bar = (v, max, cls) => {
+    const col = { hi: '#1b7a2e', md: '#a9760a', lo: '#c0392b', na: '#c2cbd8' }[cls];
+    const w = v == null ? 0 : Math.min(v / max * 100, 100);
+    return '<span style="flex:1;height:4px;background:#e2e9f1;border-radius:2px;overflow:hidden;min-width:18px"><i style="display:block;height:100%;width:' + w.toFixed(0) + '%;background:' + col + '"></i></span>';
+  };
+  return '<div class="pl"><span class="k">Reunión</span><span class="v ' + lr + '">' + (reu == null ? '—' : reu) + '</span>' + bar(reu, 15, lr) + '</div>' +
+    '<div class="pl"><span class="k">Email</span><span class="v ' + le + '">' + (em == null ? '—' : em + (tope ? '+' : '')) + '</span>' + bar(em, 33, le) + '</div>';
+}
+
 function v2RenderCartera() {
   const body = document.getElementById('v2CarteraBody');
-  if (!v2Cartera.length) { v2SetHTML(body, '<tr><td colspan="10" class="v2-empty">Sin cuentas.</td></tr>'); return; }
-  const totMayo = v2Cartera.reduce((a, r) => a + (r.mes_ant || 0), 0);
-  const totProy = v2Cartera.reduce((a, r) => a + (r.proy_lenta || 0), 0);
-  const totProy7 = v2Cartera.reduce((a, r) => a + (r.proy_rapida || 0), 0);
-  const crec = totProy - totMayo;
-  const gap = crec - 2500;
-  const var7 = totProy7 - totProy;
-  document.getElementById('v2CarteraMayo').textContent = totMayo.toLocaleString('en-US');
-  document.getElementById('v2CarteraProy').textContent = totProy.toLocaleString('en-US');
-  document.getElementById('v2CarteraProySub').textContent = (var7 >= 0 ? '▲ +' : '▼ −') + Math.abs(var7).toLocaleString('en-US') + ' a ritmo 7d';
-  document.getElementById('v2CarteraCrec').textContent = (crec >= 0 ? '+' : '−') + Math.abs(crec).toLocaleString('en-US');
-  document.getElementById('v2CarteraGap').textContent = (gap >= 0 ? 'CUMPLE +' : 'FALTA −') + Math.abs(gap).toLocaleString('en-US');
-  const gapKpi = document.getElementById('v2CarteraGapKpi');
-  if (gapKpi) gapKpi.className = 'v2-kpi ' + (gap >= 0 ? '' : 'warn');
-  const html = v2Cartera.map(r => {
-    const dist = (r.techo_envios != null && r.mes_ant != null) ? (r.techo_envios - r.mes_ant) : null;
-    const distCell = r.techo_envios == null
-      ? '<span style="color:var(--rojo)">&mdash;</span><small style="display:block;font-size:10px;color:var(--neutral-800)">sin techo</small>'
-      : '<span style="font-weight:700;color:var(--azul-oscuro-900)">' + v2Num(dist) + '</span><small style="display:block;font-size:10px;color:var(--neutral-800)">techo ' + v2Num(r.techo_envios) + '</small>';
-    const d = v2DeltaCell(r.delta);
-    const pct = r.delta_pct == null ? '&mdash;' : '<span ' + d.cls + '>' + (r.delta_pct >= 0 ? '+' : '−') + Math.abs(Math.round(r.delta_pct * 100)) + '%</span>';
+  const foot = document.getElementById('v2CarteraFoot');
+  if (!v2CartAccts.length) { v2SetHTML(body, '<tr><td colspan="24" class="v2-empty">Sin cuentas.</td></tr>'); return; }
+  const T = { rj: 0, rp: 0, vj: 0, vp: 0, techo: 0, pot: 0, gan: 0 };
+  const rows = v2CartAccts.map((a, i) => {
+    const p = a.p, ri = a.rides;
+    const rj = ri.mes_ant, rp = ri.proy_lenta;
+    const vj = p.rev_ant, vp = p.rev_proy;
+    const vpj = p.vpp_ant, vpp = p.vpp_proy;
+    const dvp = (vpj && vpp) ? (vpp / vpj - 1) * 100 : null;
+    const techo = p.techo_envios, dist = (techo != null && rj != null) ? techo - rj : null;
+    const pot = p.potencial, gan = p.por_ganar, cap = p.captura_pct;
+    T.rj += rj || 0; T.rp += rp || 0; T.vj += vj || 0; T.vp += vp || 0; T.techo += techo || 0;
+    if (pot != null) { T.pot += pot; T.gan += gan || 0; }
+    const dias = p.dias_sin_cliente;
     return '<tr>' +
-      '<td>' + (r.rank || '—') + '</td>' +
-      '<td class="v2-cliente">' + v2Esc(r.cliente) + ' <small>' + v2Esc(r.am_owner || '') + '</small></td>' +
-      '<td>' + v2Esc(r.pais || '—') + '</td>' +
-      '<td class="num">' + distCell + '</td>' +
-      '<td class="num">' + v2Num(r.mes_ant) + '</td>' +
-      '<td class="num">' + v2Num(r.mtd) + '</td>' +
-      '<td class="num">' + v2ProyCell(r.proy_lenta, r.proy_rapida) + '</td>' +
-      '<td class="num" ' + d.cls + '>' + d.txt + '</td>' +
-      '<td class="num">' + pct + '</td>' +
-      '<td>' + v2TendPill(r.delta) + '</td>' +
+      '<td class="s0">' + (i + 1) + '</td>' +
+      '<td class="s1 l"><span class="v2c-cta">' + v2Esc(p.cliente) + '</span><span class="v2c-am">' + v2Esc(p.am_registro || '') + ' · ' + v2Esc(p.workspace_id) + (p.am_mismatch ? ' · <span style="color:#c0392b">≠ asiste ' + v2Esc(p.am_real || '') + '</span>' : '') + '</span></td>' +
+      '<td>' + v2Num(rj) + '</td><td class="b">' + v2Num(rp) + ' <span style="font-size:9.5px">' + v2cDelta((rp || 0) - (rj || 0)) + '</span></td>' +
+      '<td>' + v2cUSD(vj) + '</td><td class="b">' + v2cUSD(vp) + '</td><td>' + (vp != null && vj != null ? v2cDelta(vp - vj) : '<span class="v2c-na">—</span>') + '</td>' +
+      '<td class="vp">' + (vpj ? '$' + vpj.toFixed(2) : '<span class="v2c-na">—</span>') + '</td>' +
+      '<td class="vp b">' + (vpp ? '$' + vpp.toFixed(2) : '<span class="v2c-na">—</span>') + '</td>' +
+      '<td class="vp ' + (dvp == null ? '' : dvp < 0 ? 'negv' : 'pos') + '">' + (dvp == null ? '<span class="v2c-na">—</span>' : (dvp > 0 ? '+' : '−') + Math.abs(dvp).toFixed(1) + '%') + '</td>' +
+      '<td class="tch">' + (techo == null ? '<span class="v2c-na">s/t</span>' : v2Num(techo)) + '</td><td class="tch">' + (dist == null ? '<span class="v2c-na">—</span>' : v2Num(dist)) + '</td>' +
+      '<td class="tch">' + (pot != null ? '$' + v2Num(Math.round(pot)) : '<span class="v2c-na">n/c</span>') + '</td>' +
+      '<td class="gan"><span class="n">' + (gan != null ? '$' + v2Num(Math.round(gan)) : '<span class="v2c-na">n/c</span>') + '</span>' + (cap != null ? '<div style="font-size:9px;color:#5f7c8c">' + cap.toFixed(1) + '%</div>' : '') + '</td>' +
+      '<td class="l" style="color:#8a96aa">' + v2Esc(p.ultima_reunion_cliente || '—') + '</td>' +
+      '<td><span class="dias ' + v2cSem(dias) + '">' + (dias == null ? '—' : dias) + '</span></td>' +
+      '<td class="l" style="font-size:10px">' + (p.proxima_reunion ? '<span style="color:#1b7a2e;font-weight:700">' + v2Esc(p.proxima_reunion) + '</span>' : '<span class="v2c-na">nada agendado</span>') + '</td>' +
+      '<td class="pulso">' + v2cPulso(p) + '</td>' +
+      '<td class="l v2c-xtra"><div class="qwrap">' + v2cQList(a.reg, 'tema') + '</div></td>' +
+      '<td class="l v2c-xtra"><div class="qwrap">' + v2cQList(a.reg, 'hicimos') + '</div></td>' +
+      '<td class="l v2c-xtra"><div class="qwrap">' + v2cQList(a.reg, 'cliente') + '</div></td>' +
+      '<td class="l v2c-xtra">' + v2cBloqs(a.blo) + '</td>' +
+      '<td class="l v2c-xtra">' + v2cScrap(a.reg) + '</td>' +
+      '<td class="l v2c-xtra">' + v2cWa(p.workspace_id, a.wa) + '</td>' +
       '</tr>';
   }).join('');
-  v2SetHTML(body, html);
+  v2SetHTML(body, rows);
+
+  const capT = T.pot ? T.vp / T.pot * 100 : 0;
+  v2SetHTML(foot, '<tr>' +
+    '<td class="s0"></td><td class="s1 l">TOTAL · ' + v2CartAccts.length + ' cuentas</td>' +
+    '<td>' + v2Num(T.rj) + '</td><td>' + v2Num(T.rp) + '</td>' +
+    '<td>$' + v2Num(Math.round(T.vj)) + '</td><td>$' + v2Num(Math.round(T.vp)) + '</td><td></td>' +
+    '<td></td><td></td><td></td>' +
+    '<td>' + v2Num(T.techo) + '</td><td></td><td>$' + v2Num(Math.round(T.pot)) + '</td>' +
+    '<td><span style="color:#0d6b8c">$' + v2Num(Math.round(T.gan)) + '</span> <span style="font-size:9px">' + capT.toFixed(1) + '%</span></td>' +
+    '<td class="l"></td><td></td><td class="l"></td><td class="pulso"></td>' +
+    '<td class="v2c-xtra"></td><td class="v2c-xtra"></td><td class="v2c-xtra"></td><td class="v2c-xtra"></td><td class="v2c-xtra"></td><td class="v2c-xtra"></td>' +
+    '</tr>');
+}
+
+// ---- edicion inline de la cartera (guarda a Supabase al instante) ----
+async function v2CartSaveText(el, table, field) {
+  const wrap = el.closest('[data-id]'); if (!wrap) return;
+  const id = wrap.dataset.id;
+  const value = el.innerText.trim() || null;
+  try {
+    const { error } = await sb.from(table).update({ [field]: value, updated_by: 'AM', updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) throw error;
+    el.classList.add('v2c-saved'); setTimeout(() => el.classList.remove('v2c-saved'), 900);
+  } catch (err) { alert('Error guardando: ' + err.message); console.error(err); }
+}
+async function v2CartEstado(btn, table, estado) {
+  const wrap = btn.closest('[data-id]'); if (!wrap) return;
+  const id = wrap.dataset.id;
+  const now = new Date().toISOString();
+  try {
+    const { error } = await sb.from(table).update({ estado: estado, updated_by: 'AM', updated_at: now }).eq('id', id);
+    if (error) throw error;
+    // actualizar cache local y re-render (refleja estado, botones y filtro de historico)
+    const key = table === 'cartera_bloqueos' ? 'blo' : 'reg';
+    for (const a of v2CartAccts) {
+      const row = a[key].find(x => String(x.id) === String(id));
+      if (row) { row.estado = estado; row.updated_at = now; break; }
+    }
+    v2RenderCartera();
+  } catch (err) { alert('Error: ' + err.message); console.error(err); }
+}
+async function v2CartSaveWa(el, ws, which) {
+  const payload = { workspace_id: ws, updated_by: 'AM', updated_at: new Date().toISOString() };
+  if (which === 'fecha') payload.ultimo_contacto = el.value || null;
+  else payload.nota = el.innerText.trim() || null;
+  try {
+    const { error } = await sb.from('cartera_whatsapp').upsert(payload, { onConflict: 'workspace_id' });
+    if (error) throw error;
+    el.classList.add('v2c-saved'); setTimeout(() => el.classList.remove('v2c-saved'), 900);
+  } catch (err) { alert('Error guardando WhatsApp: ' + err.message); console.error(err); }
 }
 
 // ============================================================

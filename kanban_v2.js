@@ -801,7 +801,7 @@ function v2TendPill(d) {
 let v2CartAccts = [];
 let v2cShowHist = false;
 
-function v2CartToggleHist(on) { v2cShowHist = on; v2RenderCartera(); }
+function v2CartToggleHist(on) { v2cFlushEdit(); v2cShowHist = on; v2RenderCartera(); }
 
 // "hoy" / "hace Nd" / "DD-mmm" desde un timestamp ISO
 function v2cAge(ts) {
@@ -827,6 +827,23 @@ function v2cBar(table, estado, isBloqueo, ts) {
   return '<div class="qi-bar"><span class="qbadge ' + estado + '">' + lbl + '</span>' + age + btns + '</div>';
 }
 function v2cVisible(x) { return v2cShowHist || (x.estado !== 'descartado' && x.estado !== 'resuelto'); }
+
+// ---- helpers de cache/foco (evitan que un re-render pise ediciones o el scroll) ----
+// busca la fila en el cache local por id; sin esto el render repinta el valor viejo
+function v2cFindRow(table, id) {
+  const key = table === 'cartera_bloqueos' ? 'blo' : 'reg';
+  for (const a of v2CartAccts) {
+    const row = a[key].find(x => String(x.id) === String(id));
+    if (row) return row;
+  }
+  return null;
+}
+// fuerza el blur del campo en edicion para que su onblur guarde ANTES de tocar el DOM.
+// Chrome no dispara blur si el nodo enfocado se elimina -> la edicion se perderia.
+function v2cFlushEdit() {
+  const el = document.activeElement;
+  if (el && el.isContentEditable) el.blur();
+}
 
 async function v2LoadCartera() {
   const body = document.getElementById('v2CarteraBody');
@@ -963,6 +980,11 @@ function v2cPulso(p) {
 function v2RenderCartera() {
   const body = document.getElementById('v2CarteraBody');
   const foot = document.getElementById('v2CarteraFoot');
+  // red de seguridad: vaciar el tbody resetea el scroll del contenedor. Guardamos
+  // la posicion y la reponemos al final (aplica a toggle historico y alta manual).
+  const tw = document.querySelector('#view-cartera .v2c-tw');
+  const _sx = tw ? tw.scrollLeft : 0, _sy = tw ? tw.scrollTop : 0;
+  const _restore = () => { if (tw) { tw.scrollLeft = _sx; tw.scrollTop = _sy; } };
   if (!v2CartAccts.length) { v2SetHTML(body, '<tr><td colspan="24" class="v2-empty">Sin cuentas.</td></tr>'); return; }
   const T = { rj: 0, rp: 0, vj: 0, vp: 0, techo: 0, pot: 0, gan: 0 };
   const rows = v2CartAccts.map((a, i) => {
@@ -1028,6 +1050,7 @@ function v2RenderCartera() {
     '<td class="l"></td><td></td><td class="l"></td><td class="pulso"></td>' +
     '<td class="v2c-xtra"></td><td class="v2c-xtra"></td><td class="v2c-xtra"></td><td class="v2c-xtra"></td><td class="v2c-xtra"></td><td class="v2c-xtra"></td>' +
     '</tr>');
+  _restore();
 }
 
 // ---- edicion inline de la cartera (guarda a Supabase al instante) ----
@@ -1035,30 +1058,50 @@ async function v2CartSaveText(el, table, field) {
   const wrap = el.closest('[data-id]'); if (!wrap) return;
   const id = wrap.dataset.id;
   const value = el.innerText.trim() || null;
+  const row = v2cFindRow(table, id);
+  if (row && (row[field] || null) === value) return; // sin cambios: no escribas ni muevas updated_at
+  const now = new Date().toISOString();
   try {
-    const { error } = await sb.from(table).update({ [field]: value, updated_by: 'AM', updated_at: new Date().toISOString() }).eq('id', id);
+    const { error } = await sb.from(table).update({ [field]: value, updated_by: 'AM', updated_at: now }).eq('id', id);
     if (error) throw error;
+    // reflejar en el cache: si no, el proximo render repinta el texto viejo
+    // y parece que la edicion "no se grabo".
+    if (row) { row[field] = value; row.updated_at = now; }
     el.classList.add('v2c-saved'); setTimeout(() => el.classList.remove('v2c-saved'), 900);
   } catch (err) { alert('Error guardando: ' + err.message); console.error(err); }
+}
+// quita una tarjeta del DOM y repone el placeholder si su columna quedo vacia
+function v2cRemoveCard(wrap, isBloqueo) {
+  const cont = wrap.parentNode;
+  wrap.remove();
+  if (cont && !cont.querySelector('.qi, .bx')) {
+    const ph = isBloqueo ? '<span class="v2c-na">Sin bloqueos</span>' : '<span class="v2c-na">—</span>';
+    cont.insertAdjacentHTML('afterbegin', ph);
+  }
 }
 async function v2CartEstado(btn, table, estado) {
   const wrap = btn.closest('[data-id]'); if (!wrap) return;
   const id = wrap.dataset.id;
   const now = new Date().toISOString();
+  v2cFlushEdit(); // guarda una edicion en curso antes de tocar el DOM
   try {
     const { error } = await sb.from(table).update({ estado: estado, updated_by: 'AM', updated_at: now }).eq('id', id);
     if (error) throw error;
-    // actualizar cache local y re-render (refleja estado, botones y filtro de historico)
-    const key = table === 'cartera_bloqueos' ? 'blo' : 'reg';
-    for (const a of v2CartAccts) {
-      const row = a[key].find(x => String(x.id) === String(id));
-      if (row) { row.estado = estado; row.updated_at = now; break; }
-    }
-    v2RenderCartera();
+    const row = v2cFindRow(table, id);
+    if (row) { row.estado = estado; row.updated_at = now; }
+    // Actualizacion quirurgica: solo esta tarjeta. Un v2RenderCartera() completo vacia
+    // el tbody y el navegador resetea scrollLeft/scrollTop del contenedor .v2c-tw,
+    // devolviendo al AM al inicio de la tabla (24 columnas) en cada aprobacion.
+    const isBloqueo = table === 'cartera_bloqueos';
+    if (!v2cVisible({ estado: estado })) { v2cRemoveCard(wrap, isBloqueo); return; }
+    wrap.className = (isBloqueo ? 'bx ' : 'qi ') + estado;
+    const bar = wrap.querySelector('.qi-bar');
+    if (bar) bar.outerHTML = v2cBar(table, estado, isBloqueo, now);
   } catch (err) { alert('Error: ' + err.message); console.error(err); }
 }
 // crear item cualitativo manual (lo autora el AM -> confirmado, origen manual)
 async function v2CartAddItem(btn, ws, tipo) {
+  v2cFlushEdit();
   const now = new Date().toISOString();
   const row = { workspace_id: ws, tipo: tipo, texto: '', estado: 'confirmado', origen: 'manual',
     slug: 'manual-' + Date.now() + '-' + Math.floor(Math.random() * 9999), updated_by: 'AM', updated_at: now };
@@ -1072,6 +1115,7 @@ async function v2CartAddItem(btn, ws, tipo) {
   } catch (err) { alert('Error creando: ' + err.message); console.error(err); }
 }
 async function v2CartAddBloqueo(btn, ws) {
+  v2cFlushEdit();
   const now = new Date().toISOString();
   const row = { workspace_id: ws, slug: 'manual-' + Date.now() + '-' + Math.floor(Math.random() * 9999),
     tipo: 'n', bloqueo: '', solucion: '', estado_solucion: 'definida', responsable: '', resp_externo: false,

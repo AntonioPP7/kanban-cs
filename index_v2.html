@@ -894,6 +894,25 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
   #view-expansion .v2e-no:hover{background:#fbe6e3;color:#c0392b}
   /* nivel de match del pulso: 'marca' no atribuye la reunion a esta cuenta */
   #view-expansion .mk-marca{font-size:9px;font-weight:800;color:#92400e;background:#fef3c7;padding:1px 4px;border-radius:6px;margin-left:3px}
+  /* contadores de la celda Plan */
+  #view-expansion .v2e-cnt{font-size:9px;font-weight:800;color:#475569;background:#e2e8f0;padding:1px 5px;border-radius:7px}
+  #view-expansion .v2e-bq{font-size:9px;font-weight:800;color:#c0392b;background:#fbe6e3;padding:1px 5px;border-radius:7px}
+  /* ---- lista de acciones / bloqueos (hasta 3, migration_19) ---- */
+  #view-expansion .v2e-items{display:flex;flex-direction:column;gap:6px}
+  #view-expansion .v2e-na{font-size:11.5px;color:#aab4c4;font-style:italic}
+  #view-expansion .v2e-item{background:#fff;border:1px solid #dfe6ef;border-radius:6px;padding:6px 9px;border-left:3px solid #00b8eb}
+  #view-expansion .v2e-item.is-bloqueo{border-left-color:#E74C3C;background:#fffbfa}
+  #view-expansion .v2e-item.is-resuelto{opacity:.62}
+  #view-expansion .v2e-item.is-resuelto .v2e-item-txt{text-decoration:line-through}
+  #view-expansion .v2e-item-top{display:flex;gap:8px;align-items:flex-start}
+  #view-expansion .v2e-item-txt{flex:1}
+  #view-expansion .v2e-item-bot{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:4px;font-size:10.5px;color:#8a96aa}
+  #view-expansion select.v2e-tipo{flex-shrink:0;font-size:10px;text-transform:uppercase;letter-spacing:.02em}
+  #view-expansion .v2e-del{margin-left:auto;font-size:13px;line-height:1;padding:1px 7px;font-weight:800}
+  #view-expansion .v2e-add{display:flex;gap:7px;align-items:center;margin-top:3px}
+  #view-expansion .v2e-add-b{background:#e8f6fd;color:#0369a1}
+  #view-expansion .v2e-add-b:hover{background:#00b8eb;color:#fff}
+  #view-expansion .v2e-cupo{font-size:10px;color:#aab4c4;font-weight:600}
   </style>
 
   <div class="v2-toolbar"><div>
@@ -994,7 +1013,7 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
       <select id="v2FilterExpPlan" onchange="v2RenderExpansion()">
         <option value="">Todo plan</option>
         <option value="__draft__">Draft IA por revisar</option>
-        <option value="__sin__">Sin nota</option>
+        <option value="__sin__">Sin plan</option>
         <option value="andando">Andando</option>
         <option value="bloqueado">Bloqueado</option>
         <option value="resuelto">Resuelto</option>
@@ -1027,7 +1046,7 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
           <th class="num">Crec. %</th>
           <th>Tend.</th>
           <th class="v2-tooltip" data-tooltip="Ultima reunion DETECTADA en el indice Fathom. COBERTURA PARCIAL: solo ve grabaciones de Antonio y matchea por nombre de cuenta. Vacio = no detectada, NO significa que el cliente este abandonado. 'marca' = reunion de la marca sin distinguir pais/sucursal.">Últ. reunión</th>
-          <th class="v2-tooltip" data-tooltip="Diagnostico + accion comprometida. Click en la fila para abrir y editar. El color indica hace cuanto se actualizo.">Plan</th>
+          <th class="v2-tooltip" data-tooltip="Diagnostico + hasta 3 acciones o bloqueos. Click en la fila para abrir y editar. El chip de color indica hace cuanto se actualizo; despues van los cupos usados y los bloqueos abiertos.">Plan</th>
         </tr>
       </thead>
       <tbody id="v2ExpansionBody">

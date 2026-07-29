@@ -13,8 +13,10 @@ let v2Cartera = [];
 let v2CarteraSnapshotDate = null;
 let v2Expansion = [];
 let v2ExpansionSnapshotDate = null;
-let v2ExpNotas = {};          // workspace_id -> fila de expansion_notas
+let v2ExpNotas = {};          // workspace_id -> fila de expansion_notas (diagnostico)
+let v2ExpAcciones = {};       // workspace_id -> [filas de expansion_acciones] (hasta 3)
 let v2ExpOpen = {};           // workspace_id -> panel de plan abierto
+const V2E_MAX_ACC = 3;        // cupo de acciones/bloqueos por cuenta (migration_19)
 let v2Manualidad = [];
 let v2ManualidadSnapshotDate = null;
 let v2Loaded = { rollouts: false, hc: false, cartera: false, expansion: false, manualidad: false, retention: false };
@@ -1250,17 +1252,20 @@ async function v2LoadExpansion() {
       v2Loaded.expansion = true; return;
     }
     v2ExpansionSnapshotDate = latest[0].snapshot_date;
-    const [snap, notas] = await Promise.all([
+    const [snap, notas, acciones] = await Promise.all([
       sb.from('expansion_top40').select('*').eq('snapshot_date', v2ExpansionSnapshotDate).order('rank', { ascending: true }),
       sb.from('expansion_notas').select('*'),
+      sb.from('expansion_acciones').select('*').order('seq', { ascending: true }),
     ]);
     if (snap.error) throw snap.error;
     v2Expansion = snap.data || [];
-    // Las notas son estado vivo (sin snapshot_date): si falla la tabla, la pestana
-    // sigue mostrando los numeros. No es motivo para tumbar la vista entera.
-    v2ExpNotas = {};
+    // Notas y acciones son estado vivo (sin snapshot_date): si falla una tabla, la
+    // pestana sigue mostrando los numeros. No es motivo para tumbar la vista entera.
+    v2ExpNotas = {}; v2ExpAcciones = {};
     if (notas.error) console.warn('[v2 expansion] notas:', notas.error.message);
     else (notas.data || []).forEach(n => { v2ExpNotas[n.workspace_id] = n; });
+    if (acciones.error) console.warn('[v2 expansion] acciones:', acciones.error.message);
+    else (acciones.data || []).forEach(a => { (v2ExpAcciones[a.workspace_id] = v2ExpAcciones[a.workspace_id] || []).push(a); });
     v2Loaded.expansion = true;
     const corte = v2Expansion[0] && v2Expansion[0].corte_date ? ' · corte ' + v2Expansion[0].corte_date : '';
     document.getElementById('v2ExpansionSnapshotDate').textContent =
@@ -1292,10 +1297,32 @@ function v2AlertCell(n) {
   return '<span class="v2-pill v2-pill-rojo">' + v + '</span>';
 }
 
-// Dias desde la ultima edicion del plan -> chip de frescura. Sin nota = "nada".
-function v2ExpFresh(n) {
-  if (!n || (!n.diagnostico && !n.accion)) return { cls: 'fresh-nada', txt: 'sin nota', dias: null };
-  const ts = n.updated_at || n.created_at;
+// Items de una cuenta, ordenados por cupo. Los vacios no cuentan como plan.
+function v2ExpItems(ws) {
+  return (v2ExpAcciones[ws] || []).slice().sort((a, b) => (a.seq || 0) - (b.seq || 0));
+}
+function v2ExpItemsCon(ws) {
+  return v2ExpItems(ws).filter(a => (a.texto || '').trim());
+}
+// Hay plan si hay diagnostico o al menos un item con texto.
+function v2ExpTienePlan(ws) {
+  const n = v2ExpNotas[ws];
+  return !!((n && (n.diagnostico || '').trim()) || v2ExpItemsCon(ws).length);
+}
+// Un plan esta "por revisar" mientras la nota o algun item siga en draft de IA.
+function v2ExpEsDraft(ws) {
+  const n = v2ExpNotas[ws];
+  if (n && (n.diagnostico || '').trim() && n.estado_draft === 'draft') return true;
+  return v2ExpItemsCon(ws).some(a => a.estado_draft === 'draft');
+}
+// Dias desde la ultima edicion del plan -> chip de frescura. Mira la nota Y los items:
+// cerrar un bloqueo tambien es actividad, aunque el diagnostico no se haya tocado.
+function v2ExpFresh(ws) {
+  if (!v2ExpTienePlan(ws)) return { cls: 'fresh-nada', txt: 'sin plan', dias: null };
+  const n = v2ExpNotas[ws];
+  const stamps = v2ExpItemsCon(ws).map(a => a.updated_at || a.created_at);
+  if (n) stamps.push(n.updated_at || n.created_at);
+  const ts = stamps.filter(Boolean).sort().pop();
   if (!ts) return { cls: 'fresh-nada', txt: 'sin fecha', dias: null };
   const dias = Math.floor((Date.now() - new Date(ts).getTime()) / 86400000);
   const cls = dias <= 7 ? 'fresh-ok' : (dias <= 14 ? 'fresh-tibio' : 'fresh-viejo');
@@ -1317,11 +1344,11 @@ function v2RenderExpansion() {
     if (fSem === '__alertas__') { if (!(r.alertas_criticas > 0)) return false; }
     else if (fSem && r.semaforo !== fSem) return false;
     if (fPlan) {
-      const n = v2ExpNotas[r.workspace_id];
-      const vacia = !n || (!n.diagnostico && !n.accion);
-      if (fPlan === '__sin__') { if (!vacia) return false; }
-      else if (fPlan === '__draft__') { if (vacia || n.estado_draft !== 'draft') return false; }
-      else if (!n || n.estado !== fPlan) return false;
+      const ws = r.workspace_id;
+      if (fPlan === '__sin__') { if (v2ExpTienePlan(ws)) return false; }
+      else if (fPlan === '__draft__') { if (!v2ExpEsDraft(ws)) return false; }
+      // Los estados viven en los items: la cuenta matchea si ALGUN item esta asi.
+      else if (!v2ExpItemsCon(ws).some(a => a.estado === fPlan)) return false;
     }
     return true;
   });
@@ -1350,10 +1377,12 @@ function v2RenderExpansion() {
   document.getElementById('v2ExpSplitSub').textContent = 'de ' + rows.length + ' cuentas';
   document.getElementById('v2ExpAlertas').textContent = totAlertas.toLocaleString('en-US');
   document.getElementById('v2ExpAlertasSub').textContent = nConAlertas + ' de ' + rows.length + ' cuentas afectadas';
-  const nConf = rows.filter(r => { const n = v2ExpNotas[r.workspace_id]; return n && n.estado_draft === 'confirmado' && (n.diagnostico || n.accion); }).length;
-  const nDraft = rows.filter(r => { const n = v2ExpNotas[r.workspace_id]; return n && n.estado_draft === 'draft' && (n.diagnostico || n.accion); }).length;
+  const nConf = rows.filter(r => v2ExpTienePlan(r.workspace_id) && !v2ExpEsDraft(r.workspace_id)).length;
+  const nDraft = rows.filter(r => v2ExpEsDraft(r.workspace_id)).length;
+  const nBloq = rows.reduce((a, r) => a + v2ExpItemsCon(r.workspace_id).filter(x => x.tipo === 'bloqueo' && x.estado !== 'resuelto').length, 0);
   document.getElementById('v2ExpPlan').textContent = nConf + ' / ' + rows.length;
-  document.getElementById('v2ExpPlanSub').textContent = nDraft + ' draft IA por revisar';
+  document.getElementById('v2ExpPlanSub').textContent =
+    nDraft + ' draft IA por revisar · ' + nBloq + ' bloqueo' + (nBloq === 1 ? '' : 's') + ' abierto' + (nBloq === 1 ? '' : 's');
 
   if (!rows.length) { v2SetHTML(body, '<tr><td colspan="15" class="v2-empty">Sin cuentas con ese filtro.</td></tr>'); return; }
 
@@ -1367,7 +1396,7 @@ function v2RenderExpansion() {
       ? v2Esc(r.am_owner)
       : '<span class="v2-pill v2-pill-gris">Sin AM</span>';
     const nota = v2ExpNotas[ws];
-    const fresh = v2ExpFresh(nota);
+    const fresh = v2ExpFresh(ws);
     const open = !!v2ExpOpen[ws];
     // Ultima reunion: 'marca' no atribuye la reunion a esta cuenta, se marca aparte.
     let reunion;
@@ -1378,9 +1407,7 @@ function v2RenderExpansion() {
         ? '<span class="mk-marca" title="Reunion de la marca (' + (r.marca_cuentas || '?') + ' cuentas). No se puede atribuir a este pais/local.">marca</span>' : '';
       reunion = '<span style="font-size:11px">' + v2Esc(String(r.ultima_reunion).slice(5)) + '</span>' + marca;
     }
-    const draftChip = (nota && nota.estado_draft === 'draft' && (nota.diagnostico || nota.accion))
-      ? ' <span class="v2e-draft">draft</span>' : '';
-    const plan = '<span class="fresh ' + fresh.cls + '">' + fresh.txt + '</span>' + draftChip;
+    const plan = v2ExpPlanCell(ws, fresh);
 
     const main = '<tr class="v2e-main' + (open ? ' open' : '') + '" onclick="v2ExpToggle(\'' + ws + '\')"' +
       (neg ? ' style="background:#fdf6f5"' : '') + '>' +
@@ -1405,41 +1432,88 @@ function v2RenderExpansion() {
   v2SetHTML(body, html);
 }
 
-// Panel de plan: diagnostico + accion + estado. Editable inline, guarda al blur.
+// Celda "Plan" de la tabla: frescura + cuantos items + cuantos bloqueos abiertos.
+function v2ExpPlanCell(ws, fresh) {
+  fresh = fresh || v2ExpFresh(ws);
+  const items = v2ExpItemsCon(ws);
+  const bloq = items.filter(a => a.tipo === 'bloqueo' && a.estado !== 'resuelto').length;
+  let out = '<span class="fresh ' + fresh.cls + '">' + fresh.txt + '</span>';
+  if (items.length) {
+    out += ' <span class="v2e-cnt" title="' + items.length + ' de ' + V2E_MAX_ACC + ' cupos usados">' +
+      items.length + '/' + V2E_MAX_ACC + '</span>';
+  }
+  if (bloq) out += ' <span class="v2e-bq" title="bloqueos abiertos">' + bloq + '&nbsp;bloq</span>';
+  if (v2ExpEsDraft(ws)) out += ' <span class="v2e-draft">draft</span>';
+  return out;
+}
+
+// Panel de plan: 1 diagnostico + hasta 3 acciones/bloqueos. Editable inline, guarda al blur.
 function v2ExpDetailRow(r, n, open) {
   const ws = r.workspace_id;
   n = n || {};
-  const fld = (campo, ph, val) =>
-    '<span class="etext' + (val ? '' : ' empty') + '" data-ph="' + ph + '" contenteditable="true"' +
-    ' onblur="v2ExpSave(\'' + ws + '\',\'' + campo + '\',this)"' +
-    ' onclick="event.stopPropagation()">' + v2Esc(val || '') + '</span>';
-  const est = n.estado || 'sin_accion';
-  const sel = '<select class="v2e-sel" onclick="event.stopPropagation()" onchange="v2ExpSave(\'' + ws + '\',\'estado\',this)">' +
-    Object.keys(V2E_ESTADOS).map(k =>
-      '<option value="' + k + '"' + (k === est ? ' selected' : '') + '>' + V2E_ESTADOS[k] + '</option>').join('') +
-    '</select>';
-  const tieneTexto = !!(n.diagnostico || n.accion);
-  // El boton de confirmar solo aparece mientras el draft de IA no fue revisado.
-  const acciones = (tieneTexto && n.estado_draft === 'draft')
+  const diag = '<span class="etext' + (n.diagnostico ? '' : ' empty') + '" data-ph="Por qué sube o cae…"' +
+    ' contenteditable="true" onblur="v2ExpSave(\'' + ws + '\',\'diagnostico\',this)"' +
+    ' onclick="event.stopPropagation()">' + v2Esc(n.diagnostico || '') + '</span>';
+  const items = v2ExpItems(ws);
+  const filas = items.length
+    ? items.map(a => v2ExpItemRow(ws, a, r)).join('')
+    : '<div class="v2e-na">Sin acciones ni bloqueos todavía</div>';
+  const usados = items.length;
+  const add = usados < V2E_MAX_ACC
+    ? '<div class="v2e-add">' +
+        '<button class="v2e-btn v2e-add-b" onclick="event.stopPropagation();v2ExpAddItem(\'' + ws + '\',\'accion\')">+ Acción</button>' +
+        '<button class="v2e-btn v2e-add-b" onclick="event.stopPropagation();v2ExpAddItem(\'' + ws + '\',\'bloqueo\')">+ Bloqueo</button>' +
+        '<span class="v2e-cupo">' + usados + ' de ' + V2E_MAX_ACC + ' cupos</span></div>'
+    : '<div class="v2e-add"><span class="v2e-cupo">' + V2E_MAX_ACC + ' de ' + V2E_MAX_ACC +
+      ' cupos usados — borrá uno para agregar otro</span></div>';
+
+  const dTiene = !!(n.diagnostico || '').trim();
+  const dBtns = (dTiene && n.estado_draft === 'draft')
     ? '<button class="v2e-btn v2e-ok" onclick="event.stopPropagation();v2ExpDraft(\'' + ws + '\',\'confirmado\')">Confirmar</button>' +
       '<button class="v2e-btn v2e-no" onclick="event.stopPropagation();v2ExpDraft(\'' + ws + '\',\'descartado\')">Descartar</button>'
     : '';
-  const origen = n.origen === 'ia' ? 'borrador IA' : (n.origen === 'manual' ? 'escrito por el AM' : '');
-  const quien = n.updated_by ? ' · ' + v2Esc(n.updated_by) : '';
-  const estadoDraft = n.estado_draft && tieneTexto ? ' · ' + v2Esc(n.estado_draft) : '';
+  const origen = n.origen === 'ia' ? 'diagnóstico: borrador IA' : (n.origen === 'manual' ? 'diagnóstico: escrito por el AM' : '');
+  const meta = origen
+    ? origen + (dTiene && n.estado_draft ? ' · ' + v2Esc(n.estado_draft) : '') + (n.updated_by ? ' · ' + v2Esc(n.updated_by) : '')
+    : 'sin diagnóstico todavía';
 
   return '<tr class="v2e-detail' + (open ? ' open' : '') + '" data-ws="' + ws + '"><td colspan="15">' +
     '<div class="v2e-grid">' +
-      '<div class="v2e-lbl">Diagnóstico</div><div>' + fld('diagnostico', 'Por qué sube o cae…', n.diagnostico) + '</div>' +
-      '<div class="v2e-lbl">Acción</div><div>' + fld('accion', 'Qué vamos a hacer…', n.accion) + '</div>' +
-      '<div class="v2e-lbl">Seguimiento</div><div class="v2e-inline">' +
-        '<span>Resp: ' + fld('responsable', r.am_owner || 'quién', n.responsable) + '</span>' +
-        '<span>Para: ' + fld('deadline', 'sin fecha', n.deadline) + '</span>' +
-        sel + acciones +
-      '</div>' +
+      '<div class="v2e-lbl">Diagnóstico</div><div>' + diag +
+        '<div class="v2e-meta"><span>' + meta + '</span>' + dBtns + '</div></div>' +
+      '<div class="v2e-lbl">Plan</div><div class="v2e-items">' + filas + add + '</div>' +
+    '</div></td></tr>';
+}
+
+// Un item: tipo + texto + responsable + fecha + estado + borrar.
+function v2ExpItemRow(ws, a, r) {
+  const fld = (campo, ph, val) =>
+    '<span class="etext' + (val ? '' : ' empty') + '" data-ph="' + ph + '" contenteditable="true"' +
+    ' onblur="v2ExpSaveItem(' + a.id + ',\'' + ws + '\',\'' + campo + '\',this)"' +
+    ' onclick="event.stopPropagation()">' + v2Esc(val || '') + '</span>';
+  const selTipo = '<select class="v2e-sel v2e-tipo" onclick="event.stopPropagation()" ' +
+    'onchange="v2ExpSaveItem(' + a.id + ',\'' + ws + '\',\'tipo\',this)">' +
+    ['accion', 'bloqueo'].map(k => '<option value="' + k + '"' + (k === (a.tipo || 'accion') ? ' selected' : '') +
+      '>' + (k === 'accion' ? 'Acción' : 'Bloqueo') + '</option>').join('') + '</select>';
+  const est = a.estado || 'sin_accion';
+  const selEst = '<select class="v2e-sel" onclick="event.stopPropagation()" ' +
+    'onchange="v2ExpSaveItem(' + a.id + ',\'' + ws + '\',\'estado\',this)">' +
+    Object.keys(V2E_ESTADOS).map(k => '<option value="' + k + '"' + (k === est ? ' selected' : '') +
+      '>' + V2E_ESTADOS[k] + '</option>').join('') + '</select>';
+  const draft = ((a.texto || '').trim() && a.estado_draft === 'draft')
+    ? '<button class="v2e-btn v2e-ok" onclick="event.stopPropagation();v2ExpDraftItem(' + a.id + ',\'' + ws + '\',\'confirmado\')">OK</button>' : '';
+  return '<div class="v2e-item ' + (a.tipo === 'bloqueo' ? 'is-bloqueo' : 'is-accion') +
+      (est === 'resuelto' ? ' is-resuelto' : '') + '" data-id="' + a.id + '">' +
+    '<div class="v2e-item-top">' + selTipo +
+      '<span class="v2e-item-txt">' + fld('texto', a.tipo === 'bloqueo' ? 'Qué está frenando…' : 'Qué vamos a hacer…', a.texto) + '</span>' +
     '</div>' +
-    '<div class="v2e-meta">' + (origen ? '<span>' + origen + estadoDraft + quien + '</span>' : '<span>sin nota todavía</span>') + '</div>' +
-    '</td></tr>';
+    '<div class="v2e-item-bot">' +
+      '<span>Resp: ' + fld('responsable', (r && r.am_owner) || 'quién', a.responsable) + '</span>' +
+      '<span>Para: ' + fld('deadline', 'sin fecha', a.deadline) + '</span>' +
+      selEst + draft +
+      '<button class="v2e-btn v2e-no v2e-del" title="Borrar este item" ' +
+        'onclick="event.stopPropagation();v2ExpDelItem(' + a.id + ',\'' + ws + '\')">×</button>' +
+    '</div></div>';
 }
 
 function v2ExpToggle(ws) {
@@ -1478,6 +1552,98 @@ async function v2ExpSave(ws, campo, el) {
   } catch (err) { alert('Error guardando el plan: ' + err.message); console.error(err); }
 }
 
+// ---- items (expansion_acciones): guardar / agregar / borrar / confirmar ----
+async function v2ExpSaveItem(id, ws, campo, el) {
+  const valor = (el.tagName === 'SELECT' ? el.value : el.textContent.trim());
+  const lista = v2ExpAcciones[ws] || [];
+  const it = lista.find(a => a.id === id);
+  if (!it || (it[campo] || '') === valor) return;
+  const now = new Date().toISOString();
+  const patch = { updated_by: 'AM', updated_at: now, estado_draft: 'confirmado' };
+  patch[campo] = valor;
+  // Igual que el diagnostico: tocar fecha/responsable/estado no cambia la autoria
+  // del texto, solo marca que el AM lo reviso (y frena a la IA).
+  if (campo === 'texto') patch.origen = 'manual';
+  try {
+    const { error } = await sb.from('expansion_acciones').update(patch).eq('id', id);
+    if (error) throw error;
+    Object.assign(it, patch);
+    if (valor) el.classList.remove('empty'); else el.classList.add('empty');
+    el.classList.add('v2e-saved'); setTimeout(() => el.classList.remove('v2e-saved'), 900);
+    // el tipo y el estado cambian el color del item: repintar solo esa tarjeta
+    if (campo === 'tipo' || campo === 'estado') {
+      const box = el.closest('.v2e-item') || document.querySelector('.v2e-item[data-id="' + id + '"]');
+      if (box) {
+        box.classList.toggle('is-bloqueo', it.tipo === 'bloqueo');
+        box.classList.toggle('is-accion', it.tipo !== 'bloqueo');
+        box.classList.toggle('is-resuelto', it.estado === 'resuelto');
+      }
+    }
+    v2ExpRefreshRow(ws);
+  } catch (err) { alert('Error guardando el item: ' + err.message); console.error(err); }
+}
+
+async function v2ExpAddItem(ws, tipo) {
+  const lista = v2ExpItems(ws);
+  if (lista.length >= V2E_MAX_ACC) return;
+  // Primer cupo libre: el AM pudo haber borrado el 2 y conservado el 3.
+  const usados = new Set(lista.map(a => a.seq));
+  let seq = 1;
+  while (usados.has(seq) && seq <= V2E_MAX_ACC) seq++;
+  if (seq > V2E_MAX_ACC) return;
+  const now = new Date().toISOString();
+  const row = {
+    workspace_id: ws, seq: seq, tipo: tipo, texto: '',
+    responsable: '', deadline: '',
+    estado: tipo === 'bloqueo' ? 'bloqueado' : 'sin_accion',
+    origen: 'manual', estado_draft: 'confirmado', updated_by: 'AM', updated_at: now,
+  };
+  try {
+    const { data, error } = await sb.from('expansion_acciones').insert(row).select();
+    if (error) throw error;
+    (v2ExpAcciones[ws] = v2ExpAcciones[ws] || []).push(data[0]);
+    v2ExpRedrawPanel(ws);
+    setTimeout(() => {
+      const el = document.querySelector('.v2e-item[data-id="' + data[0].id + '"] .etext');
+      if (el) el.focus();
+    }, 60);
+  } catch (err) { alert('Error creando el item: ' + err.message); console.error(err); }
+}
+
+async function v2ExpDelItem(id, ws) {
+  try {
+    const { error } = await sb.from('expansion_acciones').delete().eq('id', id);
+    if (error) throw error;
+    v2ExpAcciones[ws] = (v2ExpAcciones[ws] || []).filter(a => a.id !== id);
+    v2ExpRedrawPanel(ws);
+  } catch (err) { alert('Error borrando: ' + err.message); console.error(err); }
+}
+
+async function v2ExpDraftItem(id, ws, estadoDraft) {
+  const it = (v2ExpAcciones[ws] || []).find(a => a.id === id);
+  if (!it) return;
+  const now = new Date().toISOString();
+  try {
+    const { error } = await sb.from('expansion_acciones')
+      .update({ estado_draft: estadoDraft, updated_by: 'AM', updated_at: now }).eq('id', id);
+    if (error) throw error;
+    it.estado_draft = estadoDraft; it.updated_at = now; it.updated_by = 'AM';
+    v2ExpRedrawPanel(ws);
+  } catch (err) { alert('Error: ' + err.message); console.error(err); }
+}
+
+// Repinta solo el panel de una cuenta (no la tabla): agregar/borrar cambia la lista.
+function v2ExpRedrawPanel(ws) {
+  const det = document.querySelector('#view-expansion tr.v2e-detail[data-ws="' + ws + '"]');
+  if (!det) return;
+  const r = v2Expansion.find(x => x.workspace_id === ws) || { workspace_id: ws };
+  const tmp = document.createElement('tbody');
+  v2SetHTML(tmp, v2ExpDetailRow(r, v2ExpNotas[ws], true));
+  const nuevo = tmp.querySelector('tr');
+  if (nuevo) det.replaceWith(nuevo);
+  v2ExpRefreshRow(ws);
+}
+
 // Confirmar / descartar un draft de IA sin re-renderizar toda la tabla.
 async function v2ExpDraft(ws, estadoDraft) {
   const prev = v2ExpNotas[ws];
@@ -1497,37 +1663,29 @@ async function v2ExpDraft(ws, estadoDraft) {
 function v2ExpRefreshRow(ws) {
   const det = document.querySelector('#view-expansion tr.v2e-detail[data-ws="' + ws + '"]');
   if (!det) return;
-  const r = v2Expansion.find(x => x.workspace_id === ws);
   const n = v2ExpNotas[ws] || {};
-  const fresh = v2ExpFresh(n);
-  const tieneTexto = !!(n.diagnostico || n.accion);
   const main = det.previousElementSibling;
-  if (main) {
-    const cel = main.lastElementChild;
-    if (cel) {
-      cel.innerHTML = '<span class="fresh ' + fresh.cls + '">' + fresh.txt + '</span>' +
-        (n.estado_draft === 'draft' && tieneTexto ? ' <span class="v2e-draft">draft</span>' : '');
-    }
-  }
-  // los botones de confirmar/descartar desaparecen al revisar el draft
-  const wrap = det.querySelector('.v2e-inline');
-  if (wrap) {
-    wrap.querySelectorAll('.v2e-btn').forEach(b => b.remove());
-    if (tieneTexto && n.estado_draft === 'draft') {
-      wrap.insertAdjacentHTML('beforeend',
+  if (main && main.lastElementChild) main.lastElementChild.innerHTML = v2ExpPlanCell(ws);
+  // meta + botones del diagnostico (los de cada item los maneja v2ExpRedrawPanel)
+  const meta = det.querySelector('.v2e-meta');
+  if (meta) {
+    const dTiene = !!(n.diagnostico || '').trim();
+    const origen = n.origen === 'ia' ? 'diagnóstico: borrador IA'
+      : (n.origen === 'manual' ? 'diagnóstico: escrito por el AM' : '');
+    const txt = origen
+      ? origen + (dTiene && n.estado_draft ? ' · ' + v2Esc(n.estado_draft) : '') +
+        (n.updated_by ? ' · ' + v2Esc(n.updated_by) : '')
+      : 'sin diagnóstico todavía';
+    meta.querySelectorAll('.v2e-btn').forEach(b => b.remove());
+    const span = meta.querySelector('span');
+    if (span) span.innerHTML = txt;
+    if (dTiene && n.estado_draft === 'draft') {
+      meta.insertAdjacentHTML('beforeend',
         '<button class="v2e-btn v2e-ok" onclick="event.stopPropagation();v2ExpDraft(\'' + ws + '\',\'confirmado\')">Confirmar</button>' +
         '<button class="v2e-btn v2e-no" onclick="event.stopPropagation();v2ExpDraft(\'' + ws + '\',\'descartado\')">Descartar</button>');
     }
   }
-  const meta = det.querySelector('.v2e-meta');
-  if (meta) {
-    const origen = n.origen === 'ia' ? 'borrador IA' : (n.origen === 'manual' ? 'escrito por el AM' : '');
-    meta.innerHTML = origen
-      ? '<span>' + origen + (n.estado_draft && tieneTexto ? ' · ' + v2Esc(n.estado_draft) : '') +
-        (n.updated_by ? ' · ' + v2Esc(n.updated_by) : '') + '</span>'
-      : '<span>sin nota todavía</span>';
-  }
-  if (r) v2ExpUpdateKpiPlan();
+  v2ExpUpdateKpiPlan();
 }
 
 // Recalcula solo los KPIs de plan (los de volumen no cambian al editar una nota).
@@ -1536,15 +1694,15 @@ function v2ExpUpdateKpiPlan() {
   if (!el) return;
   const visibles = Array.from(document.querySelectorAll('#view-expansion tr.v2e-main'))
     .map(tr => tr.nextElementSibling && tr.nextElementSibling.dataset.ws).filter(Boolean);
-  let conf = 0, draft = 0;
+  let conf = 0, draft = 0, bloq = 0;
   visibles.forEach(ws => {
-    const n = v2ExpNotas[ws];
-    if (!n || (!n.diagnostico && !n.accion)) return;
-    if (n.estado_draft === 'confirmado') conf++;
-    else if (n.estado_draft === 'draft') draft++;
+    if (v2ExpEsDraft(ws)) draft++;
+    else if (v2ExpTienePlan(ws)) conf++;
+    bloq += v2ExpItemsCon(ws).filter(a => a.tipo === 'bloqueo' && a.estado !== 'resuelto').length;
   });
   el.textContent = conf + ' / ' + visibles.length;
-  document.getElementById('v2ExpPlanSub').textContent = draft + ' draft IA por revisar';
+  document.getElementById('v2ExpPlanSub').textContent =
+    draft + ' draft IA por revisar · ' + bloq + ' bloqueo' + (bloq === 1 ? '' : 's') + ' abierto' + (bloq === 1 ? '' : 's');
 }
 
 // ============================================================

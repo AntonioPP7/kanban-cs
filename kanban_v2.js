@@ -13,9 +13,15 @@ let v2Cartera = [];
 let v2CarteraSnapshotDate = null;
 let v2Expansion = [];
 let v2ExpansionSnapshotDate = null;
+let v2ExpNotas = {};          // workspace_id -> fila de expansion_notas
+let v2ExpOpen = {};           // workspace_id -> panel de plan abierto
 let v2Manualidad = [];
 let v2ManualidadSnapshotDate = null;
-let v2Loaded = { rollouts: false, hc: false, cartera: false, expansion: false, manualidad: false };
+let v2Loaded = { rollouts: false, hc: false, cartera: false, expansion: false, manualidad: false, retention: false };
+
+// URL del servicio del panel Daily Retention (Cloud Run). Vacia = pestana apagada.
+// Ver projects/picker-cs/daily-retention/servicio/README.md
+const RETENTION_BASE = '';
 
 // v2.2: Sort state, persisted en localStorage
 let v2HCSort = (function() {
@@ -66,6 +72,93 @@ function v2ShowTab(tab) {
   if (tab === 'cartera' && !v2Loaded.cartera) v2LoadCartera();
   if (tab === 'expansion' && !v2Loaded.expansion) v2LoadExpansion();
   if (tab === 'manualidad' && !v2Loaded.manualidad) v2LoadManualidad();
+  if (tab === 'retention' && !v2Loaded.retention) v2LoadRetention();
+}
+
+// ============================================================
+// DAILY RETENTION — selector de cuenta + descargas
+// ============================================================
+
+let v2RetCuentas = [];
+
+function v2RetClave() {
+  // La clave la escribio el usuario en el gate; no vive en este repo (publico en Vercel).
+  try { return sessionStorage.getItem('kanban_clave') || ''; } catch (e) { return ''; }
+}
+
+function v2RetUrl(path, ws) {
+  const k = v2RetClave();
+  const q = (ws ? 'ws=' + encodeURIComponent(ws) : '') + (k ? (ws ? '&' : '') + 'k=' + encodeURIComponent(k) : '');
+  return RETENTION_BASE.replace(/\/$/, '') + path + (q ? '?' + q : '');
+}
+
+async function v2LoadRetention() {
+  const noconf = document.getElementById('v2RetNoConfig');
+  const body = document.getElementById('v2RetBody');
+  if (!RETENTION_BASE) { noconf.style.display = ''; body.style.display = 'none'; return; }
+  noconf.style.display = 'none';
+  body.style.display = '';
+  try {
+    const r = await fetch(v2RetUrl('/cuentas', null));
+    if (r.status === 401) {
+      document.getElementById('v2RetSub').textContent =
+        'El servicio pidió la clave. Recargá la página y volvé a ingresarla en el candado.';
+      return;
+    }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    v2RetCuentas = j.cuentas || [];
+    v2Loaded.retention = true;
+    const ok = v2RetCuentas.filter(c => c.estado === 'ok').length;
+    const par = v2RetCuentas.filter(c => c.estado === 'parcial').length;
+    const no = v2RetCuentas.filter(c => c.estado === 'no_publicable').length;
+    document.getElementById('v2BadgeRetention').textContent = ok;
+    document.getElementById('v2RetSub').textContent =
+      'Datos en vivo del warehouse · catálogo del ' + (j.generado || '');
+    v2SetHTML(document.getElementById('v2RetKpis'),
+      v2RetKpi(ok, 'cobertura confiable', '#1c6b3a') +
+      v2RetKpi(par, 'cobertura parcial', '#a85a12') +
+      v2RetKpi(no, 'no publicables', '#a32020') +
+      v2RetKpi(v2RetCuentas.length, 'cuentas activas', '#314374'));
+    v2RetFiltrar();
+  } catch (e) {
+    document.getElementById('v2RetSub').textContent = 'No se pudo consultar el servicio: ' + e.message;
+  }
+}
+
+function v2RetKpi(n, label, color) {
+  return '<div class="v2-kpi"><div class="v2-kpi-val" style="color:' + color + '">' + n +
+         '</div><div class="v2-kpi-label">' + v2Esc(label) + '</div></div>';
+}
+
+function v2RetFiltrar() {
+  const q = (document.getElementById('v2RetBuscar').value || '').toLowerCase().trim();
+  const soloOk = document.getElementById('v2RetSoloOk').checked;
+  const pill = { ok: ['completa', '#e7f6ec', '#1c6b3a'], parcial: ['parcial', '#fff3e0', '#a85a12'],
+                 no_publicable: ['no publicable', '#fdecec', '#a32020'], sin_dato: ['sin dato', '#eef1f6', '#7a86a8'] };
+  const rows = v2RetCuentas
+    .filter(c => (!q || c.nombre.toLowerCase().includes(q) || c.ws.toLowerCase().includes(q)))
+    .filter(c => (!soloOk || c.estado === 'ok'))
+    .map(c => {
+      const p = pill[c.estado] || pill.sin_dato;
+      const bloq = c.estado === 'no_publicable';
+      const acciones = bloq
+        ? '<a href="' + v2RetUrl('/panel', c.ws) + '&force=1" target="_blank" rel="noopener" ' +
+          'style="color:#a32020;font-size:11.5px">ver igual (diagnóstico)</a>'
+        : '<a href="' + v2RetUrl('/panel', c.ws) + '" target="_blank" rel="noopener" ' +
+          'style="font-weight:700">Abrir panel</a>' +
+          ' · <a href="' + v2RetUrl('/panel.xlsx', c.ws) + '">Excel</a>' +
+          ' · <a href="' + v2RetUrl('/panel.csv', c.ws) + '">CSV</a>';
+      return '<tr><td><b>' + v2Esc(c.nombre) + '</b><div style="color:#a3acc4;font-size:10.5px">' +
+             v2Esc(c.ws) + '</div></td>' +
+             '<td class="num">' + (c.completed || 0).toLocaleString('es') + '</td>' +
+             '<td class="num">' + (c.cobertura != null ? c.cobertura.toFixed(0) + '%' : '—') + '</td>' +
+             '<td><span style="font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:10px;' +
+             'background:' + p[1] + ';color:' + p[2] + '">' + p[0] + '</span></td>' +
+             '<td>' + acciones + '</td></tr>';
+    }).join('');
+  v2SetHTML(document.getElementById('v2RetBody2'),
+            rows || '<tr><td colspan="5" style="padding:18px;color:#7a86a8">Sin cuentas para ese filtro.</td></tr>');
 }
 
 // ============================================================
@@ -1141,7 +1234,9 @@ async function v2CartSaveWa(el, ws, which) {
 }
 
 // ============================================================
-// EXPANSION TOP 40
+// RETENCION / EXPANSION
+// Universo: Top 40 por rides menos las 9 cuentas de Cartera 2500 (se excluyen en
+// el sync, no aca). Capa cualitativa = expansion_notas, una fila por cuenta.
 // ============================================================
 async function v2LoadExpansion() {
   const body = document.getElementById('v2ExpansionBody');
@@ -1150,21 +1245,29 @@ async function v2LoadExpansion() {
       .select('snapshot_date').order('snapshot_date', { ascending: false }).limit(1);
     if (e1) throw e1;
     if (!latest || !latest.length) {
-      v2SetHTML(body, '<tr><td colspan="13" class="v2-empty">Sin snapshot aun. El sync <code>expansion_top40</code> corre diario 7:48 AM.</td></tr>');
+      v2SetHTML(body, '<tr><td colspan="15" class="v2-empty">Sin snapshot aun. El sync <code>expansion_top40</code> corre diario 7:48 AM.</td></tr>');
       document.getElementById('v2ExpansionSnapshotDate').textContent = 'Snapshot: sin datos';
       v2Loaded.expansion = true; return;
     }
     v2ExpansionSnapshotDate = latest[0].snapshot_date;
-    const { data, error } = await sb.from('expansion_top40')
-      .select('*').eq('snapshot_date', v2ExpansionSnapshotDate).order('rank', { ascending: true });
-    if (error) throw error;
-    v2Expansion = data || [];
+    const [snap, notas] = await Promise.all([
+      sb.from('expansion_top40').select('*').eq('snapshot_date', v2ExpansionSnapshotDate).order('rank', { ascending: true }),
+      sb.from('expansion_notas').select('*'),
+    ]);
+    if (snap.error) throw snap.error;
+    v2Expansion = snap.data || [];
+    // Las notas son estado vivo (sin snapshot_date): si falla la tabla, la pestana
+    // sigue mostrando los numeros. No es motivo para tumbar la vista entera.
+    v2ExpNotas = {};
+    if (notas.error) console.warn('[v2 expansion] notas:', notas.error.message);
+    else (notas.data || []).forEach(n => { v2ExpNotas[n.workspace_id] = n; });
     v2Loaded.expansion = true;
     const corte = v2Expansion[0] && v2Expansion[0].corte_date ? ' · corte ' + v2Expansion[0].corte_date : '';
-    document.getElementById('v2ExpansionSnapshotDate').textContent = 'Snapshot: ' + v2ExpansionSnapshotDate + corte;
+    document.getElementById('v2ExpansionSnapshotDate').textContent =
+      'Snapshot: ' + v2ExpansionSnapshotDate + corte + ' · ' + v2Expansion.length + ' cuentas (excluye Cartera 2500)';
     v2RenderExpansion();
   } catch (err) {
-    v2SetHTML(body, '<tr><td colspan="13" class="v2-empty">Error: ' + v2Esc(err.message) + '</td></tr>');
+    v2SetHTML(body, '<tr><td colspan="15" class="v2-empty">Error: ' + v2Esc(err.message) + '</td></tr>');
     console.error('[v2 expansion]', err);
   }
 }
@@ -1189,17 +1292,37 @@ function v2AlertCell(n) {
   return '<span class="v2-pill v2-pill-rojo">' + v + '</span>';
 }
 
+// Dias desde la ultima edicion del plan -> chip de frescura. Sin nota = "nada".
+function v2ExpFresh(n) {
+  if (!n || (!n.diagnostico && !n.accion)) return { cls: 'fresh-nada', txt: 'sin nota', dias: null };
+  const ts = n.updated_at || n.created_at;
+  if (!ts) return { cls: 'fresh-nada', txt: 'sin fecha', dias: null };
+  const dias = Math.floor((Date.now() - new Date(ts).getTime()) / 86400000);
+  const cls = dias <= 7 ? 'fresh-ok' : (dias <= 14 ? 'fresh-tibio' : 'fresh-viejo');
+  return { cls, txt: dias === 0 ? 'hoy' : 'hace ' + dias + 'd', dias };
+}
+
+const V2E_ESTADOS = { andando: 'Andando', bloqueado: 'Bloqueado', resuelto: 'Resuelto', sin_accion: 'Sin acción' };
+
 function v2RenderExpansion() {
   const body = document.getElementById('v2ExpansionBody');
-  if (!v2Expansion.length) { v2SetHTML(body, '<tr><td colspan="13" class="v2-empty">Sin cuentas.</td></tr>'); return; }
+  if (!v2Expansion.length) { v2SetHTML(body, '<tr><td colspan="15" class="v2-empty">Sin cuentas.</td></tr>'); return; }
 
   const fAM = (document.getElementById('v2FilterExpAM') || {}).value || '';
   const fSem = (document.getElementById('v2FilterExpSem') || {}).value || '';
+  const fPlan = (document.getElementById('v2FilterExpPlan') || {}).value || '';
   const rows = v2Expansion.filter(r => {
     if (fAM === '__none__') { if (r.am_owner) return false; }
     else if (fAM && r.am_owner !== fAM) return false;
     if (fSem === '__alertas__') { if (!(r.alertas_criticas > 0)) return false; }
     else if (fSem && r.semaforo !== fSem) return false;
+    if (fPlan) {
+      const n = v2ExpNotas[r.workspace_id];
+      const vacia = !n || (!n.diagnostico && !n.accion);
+      if (fPlan === '__sin__') { if (!vacia) return false; }
+      else if (fPlan === '__draft__') { if (vacia || n.estado_draft !== 'draft') return false; }
+      else if (!n || n.estado !== fPlan) return false;
+    }
     return true;
   });
 
@@ -1212,7 +1335,7 @@ function v2RenderExpansion() {
   const nDown = rows.filter(r => (r.delta || 0) < 0).length;
   const totAlertas = rows.reduce((a, r) => a + (r.alertas_criticas || 0), 0);
   const nConAlertas = rows.filter(r => (r.alertas_criticas || 0) > 0).length;
-  const scope = fAM === '__none__' ? 'cuentas sin AM' : (fAM ? 'cartera ' + fAM : 'rides Top 40');
+  const scope = fAM === '__none__' ? 'cuentas sin AM' : (fAM ? 'cartera ' + fAM : 'retención / expansión');
 
   document.getElementById('v2ExpMayo').textContent = totMayo.toLocaleString('en-US');
   document.getElementById('v2ExpMayoSub').textContent = scope + ' · ' + rows.length + ' cuentas';
@@ -1227,10 +1350,15 @@ function v2RenderExpansion() {
   document.getElementById('v2ExpSplitSub').textContent = 'de ' + rows.length + ' cuentas';
   document.getElementById('v2ExpAlertas').textContent = totAlertas.toLocaleString('en-US');
   document.getElementById('v2ExpAlertasSub').textContent = nConAlertas + ' de ' + rows.length + ' cuentas afectadas';
+  const nConf = rows.filter(r => { const n = v2ExpNotas[r.workspace_id]; return n && n.estado_draft === 'confirmado' && (n.diagnostico || n.accion); }).length;
+  const nDraft = rows.filter(r => { const n = v2ExpNotas[r.workspace_id]; return n && n.estado_draft === 'draft' && (n.diagnostico || n.accion); }).length;
+  document.getElementById('v2ExpPlan').textContent = nConf + ' / ' + rows.length;
+  document.getElementById('v2ExpPlanSub').textContent = nDraft + ' draft IA por revisar';
 
-  if (!rows.length) { v2SetHTML(body, '<tr><td colspan="13" class="v2-empty">Sin cuentas con ese filtro.</td></tr>'); return; }
+  if (!rows.length) { v2SetHTML(body, '<tr><td colspan="15" class="v2-empty">Sin cuentas con ese filtro.</td></tr>'); return; }
 
   const html = rows.map(r => {
+    const ws = r.workspace_id;
     const neg = (r.delta || 0) < 0;
     const d = v2DeltaCell(r.delta);
     const pct = r.delta_pct == null ? '&mdash;' : '<span ' + d.cls + '>' + (r.delta_pct >= 0 ? '+' : '−') + Math.abs(Math.round(r.delta_pct * 100)) + '%</span>';
@@ -1238,9 +1366,26 @@ function v2RenderExpansion() {
     const am = r.am_owner
       ? v2Esc(r.am_owner)
       : '<span class="v2-pill v2-pill-gris">Sin AM</span>';
-    return '<tr' + (neg ? ' style="background:#fdf6f5"' : '') + '>' +
+    const nota = v2ExpNotas[ws];
+    const fresh = v2ExpFresh(nota);
+    const open = !!v2ExpOpen[ws];
+    // Ultima reunion: 'marca' no atribuye la reunion a esta cuenta, se marca aparte.
+    let reunion;
+    if (!r.ultima_reunion) {
+      reunion = '<span style="color:var(--neutral-800);font-size:10.5px">no detectada</span>';
+    } else {
+      const marca = r.match_nivel === 'marca'
+        ? '<span class="mk-marca" title="Reunion de la marca (' + (r.marca_cuentas || '?') + ' cuentas). No se puede atribuir a este pais/local.">marca</span>' : '';
+      reunion = '<span style="font-size:11px">' + v2Esc(String(r.ultima_reunion).slice(5)) + '</span>' + marca;
+    }
+    const draftChip = (nota && nota.estado_draft === 'draft' && (nota.diagnostico || nota.accion))
+      ? ' <span class="v2e-draft">draft</span>' : '';
+    const plan = '<span class="fresh ' + fresh.cls + '">' + fresh.txt + '</span>' + draftChip;
+
+    const main = '<tr class="v2e-main' + (open ? ' open' : '') + '" onclick="v2ExpToggle(\'' + ws + '\')"' +
+      (neg ? ' style="background:#fdf6f5"' : '') + '>' +
       '<td>' + (r.rank || '—') + '</td>' +
-      '<td class="v2-cliente">' + v2Esc(r.workspace_name) + region + '</td>' +
+      '<td class="v2-cliente"><span class="v2e-chev">&#9654;</span>' + v2Esc(r.workspace_name) + region + '</td>' +
       '<td>' + am + '</td>' +
       '<td>' + (V2_SEM_PILL[r.semaforo] || '<span class="v2-pill v2-pill-gris">&mdash;</span>') + '</td>' +
       '<td class="num">' + v2ScoreCell(r.healthscore) + '</td>' +
@@ -1252,9 +1397,154 @@ function v2RenderExpansion() {
       '<td class="num" ' + d.cls + '>' + d.txt + '</td>' +
       '<td class="num">' + pct + '</td>' +
       '<td>' + v2TendPill(r.delta) + '</td>' +
+      '<td>' + reunion + '</td>' +
+      '<td>' + plan + '</td>' +
       '</tr>';
+    return main + v2ExpDetailRow(r, nota, open);
   }).join('');
   v2SetHTML(body, html);
+}
+
+// Panel de plan: diagnostico + accion + estado. Editable inline, guarda al blur.
+function v2ExpDetailRow(r, n, open) {
+  const ws = r.workspace_id;
+  n = n || {};
+  const fld = (campo, ph, val) =>
+    '<span class="etext' + (val ? '' : ' empty') + '" data-ph="' + ph + '" contenteditable="true"' +
+    ' onblur="v2ExpSave(\'' + ws + '\',\'' + campo + '\',this)"' +
+    ' onclick="event.stopPropagation()">' + v2Esc(val || '') + '</span>';
+  const est = n.estado || 'sin_accion';
+  const sel = '<select class="v2e-sel" onclick="event.stopPropagation()" onchange="v2ExpSave(\'' + ws + '\',\'estado\',this)">' +
+    Object.keys(V2E_ESTADOS).map(k =>
+      '<option value="' + k + '"' + (k === est ? ' selected' : '') + '>' + V2E_ESTADOS[k] + '</option>').join('') +
+    '</select>';
+  const tieneTexto = !!(n.diagnostico || n.accion);
+  // El boton de confirmar solo aparece mientras el draft de IA no fue revisado.
+  const acciones = (tieneTexto && n.estado_draft === 'draft')
+    ? '<button class="v2e-btn v2e-ok" onclick="event.stopPropagation();v2ExpDraft(\'' + ws + '\',\'confirmado\')">Confirmar</button>' +
+      '<button class="v2e-btn v2e-no" onclick="event.stopPropagation();v2ExpDraft(\'' + ws + '\',\'descartado\')">Descartar</button>'
+    : '';
+  const origen = n.origen === 'ia' ? 'borrador IA' : (n.origen === 'manual' ? 'escrito por el AM' : '');
+  const quien = n.updated_by ? ' · ' + v2Esc(n.updated_by) : '';
+  const estadoDraft = n.estado_draft && tieneTexto ? ' · ' + v2Esc(n.estado_draft) : '';
+
+  return '<tr class="v2e-detail' + (open ? ' open' : '') + '" data-ws="' + ws + '"><td colspan="15">' +
+    '<div class="v2e-grid">' +
+      '<div class="v2e-lbl">Diagnóstico</div><div>' + fld('diagnostico', 'Por qué sube o cae…', n.diagnostico) + '</div>' +
+      '<div class="v2e-lbl">Acción</div><div>' + fld('accion', 'Qué vamos a hacer…', n.accion) + '</div>' +
+      '<div class="v2e-lbl">Seguimiento</div><div class="v2e-inline">' +
+        '<span>Resp: ' + fld('responsable', r.am_owner || 'quién', n.responsable) + '</span>' +
+        '<span>Para: ' + fld('deadline', 'sin fecha', n.deadline) + '</span>' +
+        sel + acciones +
+      '</div>' +
+    '</div>' +
+    '<div class="v2e-meta">' + (origen ? '<span>' + origen + estadoDraft + quien + '</span>' : '<span>sin nota todavía</span>') + '</div>' +
+    '</td></tr>';
+}
+
+function v2ExpToggle(ws) {
+  v2ExpOpen[ws] = !v2ExpOpen[ws];
+  // Toggle quirurgico: un re-render completo perderia el foco de una celda en edicion.
+  const det = document.querySelector('#view-expansion tr.v2e-detail[data-ws="' + ws + '"]');
+  if (det) {
+    det.classList.toggle('open', v2ExpOpen[ws]);
+    if (det.previousElementSibling) det.previousElementSibling.classList.toggle('open', v2ExpOpen[ws]);
+  }
+}
+
+// ---- edicion inline del plan (upsert a Supabase al instante) ----
+// Upsert y no update: la fila puede no existir (cuenta sin draft de IA todavia).
+async function v2ExpSave(ws, campo, el) {
+  const valor = (el.tagName === 'SELECT' ? el.value : el.textContent.trim());
+  const prev = v2ExpNotas[ws] || {};
+  if ((prev[campo] || '') === valor) return;         // sin cambio real, no escribimos
+  const now = new Date().toISOString();
+  const row = Object.assign({}, prev, { workspace_id: ws, updated_by: 'AM', updated_at: now });
+  row[campo] = valor;
+  // Cualquier edicion cuenta como revision: el job de IA ya no vuelve a pisar la fila.
+  row.estado_draft = 'confirmado';
+  // Pero la autoria solo cambia si el AM reescribio el contenido de fondo. Tocar la
+  // fecha o el responsable no convierte un diagnostico de la IA en texto del AM.
+  if (campo === 'diagnostico' || campo === 'accion') row.origen = 'manual';
+  delete row.id; delete row.created_at;
+  try {
+    const { data, error } = await sb.from('expansion_notas')
+      .upsert(row, { onConflict: 'workspace_id' }).select();
+    if (error) throw error;
+    v2ExpNotas[ws] = data && data[0] ? data[0] : row;
+    if (valor) el.classList.remove('empty'); else el.classList.add('empty');
+    el.classList.add('v2e-saved'); setTimeout(() => el.classList.remove('v2e-saved'), 900);
+    v2ExpRefreshRow(ws);
+  } catch (err) { alert('Error guardando el plan: ' + err.message); console.error(err); }
+}
+
+// Confirmar / descartar un draft de IA sin re-renderizar toda la tabla.
+async function v2ExpDraft(ws, estadoDraft) {
+  const prev = v2ExpNotas[ws];
+  if (!prev) return;
+  const now = new Date().toISOString();
+  try {
+    const { error } = await sb.from('expansion_notas')
+      .update({ estado_draft: estadoDraft, updated_by: 'AM', updated_at: now }).eq('workspace_id', ws);
+    if (error) throw error;
+    prev.estado_draft = estadoDraft; prev.updated_at = now; prev.updated_by = 'AM';
+    v2ExpRefreshRow(ws);
+  } catch (err) { alert('Error: ' + err.message); console.error(err); }
+}
+
+// Repinta solo la celda "Plan" y la meta del panel. Un v2RenderExpansion() completo
+// resetea el scroll de la tabla (15 columnas) y cierra el panel abierto.
+function v2ExpRefreshRow(ws) {
+  const det = document.querySelector('#view-expansion tr.v2e-detail[data-ws="' + ws + '"]');
+  if (!det) return;
+  const r = v2Expansion.find(x => x.workspace_id === ws);
+  const n = v2ExpNotas[ws] || {};
+  const fresh = v2ExpFresh(n);
+  const tieneTexto = !!(n.diagnostico || n.accion);
+  const main = det.previousElementSibling;
+  if (main) {
+    const cel = main.lastElementChild;
+    if (cel) {
+      cel.innerHTML = '<span class="fresh ' + fresh.cls + '">' + fresh.txt + '</span>' +
+        (n.estado_draft === 'draft' && tieneTexto ? ' <span class="v2e-draft">draft</span>' : '');
+    }
+  }
+  // los botones de confirmar/descartar desaparecen al revisar el draft
+  const wrap = det.querySelector('.v2e-inline');
+  if (wrap) {
+    wrap.querySelectorAll('.v2e-btn').forEach(b => b.remove());
+    if (tieneTexto && n.estado_draft === 'draft') {
+      wrap.insertAdjacentHTML('beforeend',
+        '<button class="v2e-btn v2e-ok" onclick="event.stopPropagation();v2ExpDraft(\'' + ws + '\',\'confirmado\')">Confirmar</button>' +
+        '<button class="v2e-btn v2e-no" onclick="event.stopPropagation();v2ExpDraft(\'' + ws + '\',\'descartado\')">Descartar</button>');
+    }
+  }
+  const meta = det.querySelector('.v2e-meta');
+  if (meta) {
+    const origen = n.origen === 'ia' ? 'borrador IA' : (n.origen === 'manual' ? 'escrito por el AM' : '');
+    meta.innerHTML = origen
+      ? '<span>' + origen + (n.estado_draft && tieneTexto ? ' · ' + v2Esc(n.estado_draft) : '') +
+        (n.updated_by ? ' · ' + v2Esc(n.updated_by) : '') + '</span>'
+      : '<span>sin nota todavía</span>';
+  }
+  if (r) v2ExpUpdateKpiPlan();
+}
+
+// Recalcula solo los KPIs de plan (los de volumen no cambian al editar una nota).
+function v2ExpUpdateKpiPlan() {
+  const el = document.getElementById('v2ExpPlan');
+  if (!el) return;
+  const visibles = Array.from(document.querySelectorAll('#view-expansion tr.v2e-main'))
+    .map(tr => tr.nextElementSibling && tr.nextElementSibling.dataset.ws).filter(Boolean);
+  let conf = 0, draft = 0;
+  visibles.forEach(ws => {
+    const n = v2ExpNotas[ws];
+    if (!n || (!n.diagnostico && !n.accion)) return;
+    if (n.estado_draft === 'confirmado') conf++;
+    else if (n.estado_draft === 'draft') draft++;
+  });
+  el.textContent = conf + ' / ' + visibles.length;
+  document.getElementById('v2ExpPlanSub').textContent = draft + ' draft IA por revisar';
 }
 
 // ============================================================

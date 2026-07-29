@@ -398,8 +398,9 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
   <div class="v2-tab" data-v2-tab="rollouts" onclick="v2ShowTab('rollouts')">Rollouts <span class="v2-badge" id="v2BadgeRollouts">0</span></div>
   <div class="v2-tab" data-v2-tab="healthcheck" onclick="v2ShowTab('healthcheck')">Health Check <span class="v2-badge">Top 30</span></div>
   <div class="v2-tab" data-v2-tab="cartera" onclick="v2ShowTab('cartera')">Cartera 2500</div>
-  <div class="v2-tab" data-v2-tab="expansion" onclick="v2ShowTab('expansion')">Expansión <span class="v2-badge">Top 40</span></div>
+  <div class="v2-tab" data-v2-tab="expansion" onclick="v2ShowTab('expansion')">Retención / Expansión <span class="v2-badge">Portafolio</span></div>
   <div class="v2-tab" data-v2-tab="manualidad" onclick="v2ShowTab('manualidad')">Manualidad</div>
+  <div class="v2-tab" data-v2-tab="retention" onclick="v2ShowTab('retention')">Retention <span class="v2-badge" id="v2BadgeRetention">—</span></div>
 </div>
 
 <!-- V2 View: Ciclo (wraps current kanban) -->
@@ -858,6 +859,41 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
   #view-cartera .v2c-objbar{height:7px;background:#e2e9f1;border-radius:4px;overflow:hidden;margin:6px 0}
   #view-cartera .v2c-objbar i{display:block;height:100%;background:#00b8eb;transition:width .3s}
   #view-cartera .v2c-objsub{font-size:11.5px;font-weight:800}
+
+  /* ---- Retencion / Expansion: panel de plan por cuenta (migration_18) ---- */
+  #view-expansion tr.v2e-main{cursor:pointer}
+  #view-expansion tr.v2e-main:hover{background:#f2f8fd}
+  #view-expansion tr.v2e-main.open{background:#eef6fc}
+  #view-expansion .v2e-chev{display:inline-block;width:11px;color:#8a96aa;font-size:9px;transition:transform .15s;margin-right:3px}
+  #view-expansion tr.v2e-main.open .v2e-chev{transform:rotate(90deg);color:#00b8eb}
+  /* fila de detalle: colapsada por defecto, la abre v2ExpToggle */
+  #view-expansion tr.v2e-detail{display:none}
+  #view-expansion tr.v2e-detail.open{display:table-row}
+  #view-expansion tr.v2e-detail>td{background:#f7fbfe;border-left:4px solid #00b8eb;padding:11px 14px 13px}
+  #view-expansion .v2e-grid{display:grid;grid-template-columns:96px 1fr;gap:7px 12px;align-items:start;max-width:1100px}
+  #view-expansion .v2e-lbl{font-size:10px;font-weight:800;color:#8a96aa;text-transform:uppercase;letter-spacing:.3px;padding-top:3px}
+  #view-expansion .etext{outline:none;font-size:12px;color:#314374;line-height:1.5;border-bottom:1px dashed #c7d0dd;padding:2px 4px;min-height:18px}
+  #view-expansion .etext:focus{background:#fffef8;box-shadow:0 0 0 2px #00b8eb55;border-radius:3px;border-bottom-color:transparent}
+  #view-expansion .etext.empty:before{content:attr(data-ph);color:#aab4c4;font-style:italic}
+  #view-expansion .v2e-inline{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  #view-expansion .v2e-inline .etext{min-width:90px}
+  #view-expansion select.v2e-sel{font-family:inherit;font-size:11px;font-weight:700;padding:2px 5px;border:1px solid #c7d0dd;border-radius:4px;color:#314374;background:#fff}
+  #view-expansion .v2e-meta{font-size:10px;color:#8a96aa;display:flex;gap:9px;align-items:center;margin-top:2px}
+  #view-expansion .v2e-saved{animation:v2cflash .9s}
+  /* frescura del plan: cuanto hace que se toco */
+  #view-expansion .fresh{font-size:9.5px;font-weight:800;padding:1px 5px;border-radius:7px;white-space:nowrap}
+  #view-expansion .fresh-ok{background:#e3f5e8;color:#1b7a2e}
+  #view-expansion .fresh-tibio{background:#fef3c7;color:#92400e}
+  #view-expansion .fresh-viejo{background:#fbe6e3;color:#c0392b}
+  #view-expansion .fresh-nada{background:#e2e8f0;color:#64748b}
+  #view-expansion .v2e-draft{background:#efe9fd;color:#6b46c1;font-size:9px;font-weight:800;padding:1px 5px;border-radius:7px;text-transform:uppercase}
+  #view-expansion .v2e-btn{font-family:inherit;font-size:10px;font-weight:700;padding:3px 10px;border:none;border-radius:4px;cursor:pointer;transition:.15s}
+  #view-expansion .v2e-ok{background:#00c589;color:#fff}
+  #view-expansion .v2e-ok:hover{background:#00986d}
+  #view-expansion .v2e-no{background:#eef1f6;color:#64748b}
+  #view-expansion .v2e-no:hover{background:#fbe6e3;color:#c0392b}
+  /* nivel de match del pulso: 'marca' no atribuye la reunion a esta cuenta */
+  #view-expansion .mk-marca{font-size:9px;font-weight:800;color:#92400e;background:#fef3c7;padding:1px 4px;border-radius:6px;margin-left:3px}
   </style>
 
   <div class="v2-toolbar"><div>
@@ -934,11 +970,11 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
   </div>
 </div>
 
-<!-- V2 View: Expansion Top 40 -->
+<!-- V2 View: Retencion / Expansion -->
 <div id="view-expansion" class="v2-view">
   <div class="v2-toolbar">
     <div>
-      <h2>Expansión Top 40 — portafolio</h2>
+      <h2>Retención / Expansión — portafolio</h2>
       <div class="v2-sub" id="v2ExpansionSnapshotDate">Snapshot: —</div>
     </div>
     <div class="v2-filters">
@@ -955,14 +991,23 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
         <option value="rojo">Rojo</option>
         <option value="__alertas__">Con alertas rojas</option>
       </select>
+      <select id="v2FilterExpPlan" onchange="v2RenderExpansion()">
+        <option value="">Todo plan</option>
+        <option value="__draft__">Draft IA por revisar</option>
+        <option value="__sin__">Sin nota</option>
+        <option value="andando">Andando</option>
+        <option value="bloqueado">Bloqueado</option>
+        <option value="resuelto">Resuelto</option>
+      </select>
     </div>
   </div>
   <div class="v2-kpi-row">
-    <div class="v2-kpi"><div class="v2-kpi-label">Mes anterior (cerrado)</div><div class="v2-kpi-value" id="v2ExpMayo">—</div><div class="v2-kpi-sub" id="v2ExpMayoSub">rides Top 40</div></div>
+    <div class="v2-kpi"><div class="v2-kpi-label">Mes anterior (cerrado)</div><div class="v2-kpi-value" id="v2ExpMayo">—</div><div class="v2-kpi-sub" id="v2ExpMayoSub">rides</div></div>
     <div class="v2-kpi"><div class="v2-kpi-label">Proy. cierre mes</div><div class="v2-kpi-value" id="v2ExpProy">—</div><div class="v2-kpi-sub" id="v2ExpProySub">—</div></div>
     <div class="v2-kpi"><div class="v2-kpi-label">Crecimiento neto</div><div class="v2-kpi-value" id="v2ExpNeto">—</div><div class="v2-kpi-sub" id="v2ExpNetoSub">—</div></div>
-    <div class="v2-kpi"><div class="v2-kpi-label">Expanden / contraen</div><div class="v2-kpi-value" id="v2ExpSplit">—</div><div class="v2-kpi-sub" id="v2ExpSplitSub">de 40 cuentas</div></div>
+    <div class="v2-kpi"><div class="v2-kpi-label">Expanden / contraen</div><div class="v2-kpi-value" id="v2ExpSplit">—</div><div class="v2-kpi-sub" id="v2ExpSplitSub">—</div></div>
     <div class="v2-kpi danger"><div class="v2-kpi-label">Alertas rojas</div><div class="v2-kpi-value" id="v2ExpAlertas">—</div><div class="v2-kpi-sub" id="v2ExpAlertasSub">—</div></div>
+    <div class="v2-kpi"><div class="v2-kpi-label">Con plan confirmado</div><div class="v2-kpi-value" id="v2ExpPlan">—</div><div class="v2-kpi-sub" id="v2ExpPlanSub">—</div></div>
   </div>
   <div class="v2-table-wrap">
     <table class="v2-table" id="v2ExpansionTable">
@@ -981,16 +1026,21 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
           <th class="num">Crecim.</th>
           <th class="num">Crec. %</th>
           <th>Tend.</th>
+          <th class="v2-tooltip" data-tooltip="Ultima reunion DETECTADA en el indice Fathom. COBERTURA PARCIAL: solo ve grabaciones de Antonio y matchea por nombre de cuenta. Vacio = no detectada, NO significa que el cliente este abandonado. 'marca' = reunion de la marca sin distinguir pais/sucursal.">Últ. reunión</th>
+          <th class="v2-tooltip" data-tooltip="Diagnostico + accion comprometida. Click en la fila para abrir y editar. El color indica hace cuanto se actualizo.">Plan</th>
         </tr>
       </thead>
       <tbody id="v2ExpansionBody">
-        <tr><td colspan="13" class="v2-empty">Cargando Top 40...</td></tr>
+        <tr><td colspan="15" class="v2-empty">Cargando cuentas...</td></tr>
       </tbody>
     </table>
   </div>
   <div class="v2-sub" style="padding:8px 0;line-height:1.6">
-    Top 40 por rides del mes anterior cerrado (excluye demo/test). Expansión = proy. cierre supera el mes anterior.
+    Top 40 por rides del mes anterior cerrado (excluye demo/test) <strong>menos las 9 cuentas de Cartera 2500</strong>,
+    que se siguen en su propia pestaña. Expansión = proy. cierre supera el mes anterior.
     Las cuentas sin AM asignado en el Hub aparecen igual, agrupadas bajo "Sin AM". Los KPIs recalculan segun el filtro. Update diario 7:48 AM.
+    <br><strong>Últ. reunión</strong> tiene cobertura parcial: el índice Fathom solo tiene las grabaciones de Antonio, no las de Carlos ni Juan Xavier,
+    y el match es por nombre de cuenta. Una celda vacía significa <em>no detectada</em>, no cliente abandonado.
   </div>
 </div>
 
@@ -1039,6 +1089,54 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
     <b>Badge (arriba dcha.)</b> = <b>% manual ponderado por pedidos</b> (cuentas grandes pesan más); el número grande es el % puro y abajo la distancia al target de 10% (verde = ≤10%, rojo = &gt;10%).
     <b>Al día</b> = rolling de los últimos 7 días hasta ayer (se mueve cada día). <b>Sem. ISO ant.</b> = última semana lun–dom cerrada. El desglose <b>ruta</b> es referencial (su target no es 10%, por eso va en gris).<br>
     <span style="opacity:.75">Solo cuentas con ≥20 pedidos MY_FLEET en la ventana. Semanas ISO (lun). Update diario 7:49 AM.</span>
+  </div>
+</div>
+
+<div id="view-retention" class="v2-view">
+  <div class="v2-toolbar">
+    <div>
+      <h2>Daily Retention — panel de tiempos por cuenta</h2>
+      <div class="v2-sub" id="v2RetSub">Datos en vivo del warehouse</div>
+    </div>
+  </div>
+
+  <div id="v2RetNoConfig" style="display:none">
+    <div class="v2-empty" style="padding:28px;background:#fff;border-radius:8px;line-height:1.7">
+      <b>El servicio del panel todavía no está desplegado.</b><br>
+      Cuando esté en Cloud Run, poné su URL en <code>RETENTION_BASE</code> dentro de
+      <code>kanban_v2.js</code> y esta pestaña se enciende sola.<br>
+      <span style="opacity:.75">Pasos de despliegue en
+      <code>projects/picker-cs/daily-retention/servicio/README.md</code>.</span>
+    </div>
+  </div>
+
+  <div id="v2RetBody" style="display:none">
+    <div class="v2-kpi-row" id="v2RetKpis"></div>
+    <div style="display:flex;gap:10px;align-items:center;margin:12px 0">
+      <input type="text" id="v2RetBuscar" placeholder="Buscar cuenta…" oninput="v2RetFiltrar()"
+             style="flex:1;max-width:320px;padding:9px 12px;border:1px solid var(--neutral-200);border-radius:6px;font-size:13px">
+      <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" id="v2RetSoloOk" onchange="v2RetFiltrar()"> Solo cobertura confiable
+      </label>
+    </div>
+    <div class="v2-table-wrap">
+      <table class="v2-table">
+        <thead><tr>
+          <th>Cuenta</th><th class="num">Pedidos 35d</th><th class="num">Cobertura</th>
+          <th>Estado</th><th style="width:230px">Panel y descargas</th>
+        </tr></thead>
+        <tbody id="v2RetBody2"></tbody>
+      </table>
+    </div>
+    <div class="v2-sub" style="padding:10px 0;line-height:1.6">
+      <b>Cobertura</b> = pedidos completados que registran los seis timestamps del recorrido, sobre el
+      total de completados. Es la porción de la operación que el panel puede medir.
+      <b>Bajo 25% no se publica</b>: una mediana sobre esa fracción no describe a la cuenta, y el
+      subconjunto que sí registra todo no es una muestra al azar (pasa con registro ex-post de flota
+      propia o integraciones que no emiten todos los eventos).<br>
+      <span style="opacity:.75">El PDF sale del propio panel con el botón “Descargar PDF”. El Excel
+      trae una hoja por base; el CSV, un archivo por base dentro de un ZIP.</span>
+    </div>
   </div>
 </div>
 
@@ -2301,7 +2399,10 @@ INSERT INTO kanban_cards (title, workspace, assignee, category, motion, status, 
   var ov=document.getElementById('gateOverlay'),inp=document.getElementById('gateInput'),btn=document.getElementById('gateBtn'),err=document.getElementById('gateErr');
   if(localStorage.getItem('kanban_gate')===GATE_HASH){ov.remove();return;}
   function sha256(s){return crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)).then(function(b){return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');});}
-  function check(){sha256(inp.value.trim()).then(function(h){if(h===GATE_HASH){localStorage.setItem('kanban_gate',GATE_HASH);ov.remove();}else{err.style.visibility='visible';inp.value='';inp.focus();}});}
+  // La clave en claro queda en sessionStorage (solo esta pestana, se borra al cerrarla) para que
+  // la pestana Retention pueda autenticarse contra el servicio del panel sin hardcodear el secreto
+  // en este repo, que es publico en Vercel.
+  function check(){var v=inp.value.trim();sha256(v).then(function(h){if(h===GATE_HASH){localStorage.setItem('kanban_gate',GATE_HASH);try{sessionStorage.setItem('kanban_clave',v);}catch(e){}ov.remove();}else{err.style.visibility='visible';inp.value='';inp.focus();}});}
   btn.addEventListener('click',check);
   inp.addEventListener('keydown',function(e){if(e.key==='Enter')check();});
   inp.focus();

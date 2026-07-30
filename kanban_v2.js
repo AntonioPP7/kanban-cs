@@ -19,7 +19,8 @@ let v2ExpOpen = {};           // workspace_id -> panel de plan abierto
 const V2E_MAX_ACC = 3;        // cupo de acciones/bloqueos por cuenta (migration_19)
 let v2Manualidad = [];
 let v2ManualidadSnapshotDate = null;
-let v2Loaded = { rollouts: false, hc: false, cartera: false, expansion: false, manualidad: false, retention: false };
+let v2Loaded = { rollouts: false, hc: false, cartera: false, expansion: false, manualidad: false, retention: false, log: false };
+let v2Log = [];               // entradas normalizadas del log (ver v2LoadLog)
 
 // URL del servicio del panel Daily Retention (Cloud Run). Vacia = pestana apagada.
 // Ver projects/picker-cs/daily-retention/servicio/README.md
@@ -75,6 +76,7 @@ function v2ShowTab(tab) {
   if (tab === 'expansion' && !v2Loaded.expansion) v2LoadExpansion();
   if (tab === 'manualidad' && !v2Loaded.manualidad) v2LoadManualidad();
   if (tab === 'retention' && !v2Loaded.retention) v2LoadRetention();
+  if (tab === 'log' && !v2Loaded.log) v2LoadLog();
 }
 
 // ============================================================
@@ -1858,6 +1860,173 @@ function v2RenderManualidad() {
       '<td>' + polLabel + '<span class="v2-editable" data-id="' + safeId + '" data-field="politica" contenteditable="true" onblur="v2SaveInline(this,\'manualidad_weekly\')">' + v2Esc(r.politica || '') + '</span></td>' +
       '<td><span class="v2-editable" data-id="' + safeId + '" data-field="comentario" contenteditable="true" onblur="v2SaveInline(this,\'manualidad_weekly\')">' + v2Esc(r.comentario || '') + '</span></td>' +
       '<td class="num">' + pedidos + '</td>' +
+      '</tr>';
+  }).join('');
+  v2SetHTML(body, html);
+}
+
+// ============================================================
+// LOG — lo cerrado y lo archivado de las otras pestanas
+// Espejo VIVO, no historico congelado: si alguien restaura un item en su
+// pestana original, la entrada se cae de aca en el siguiente load. No hay
+// tabla propia a proposito — duplicarla obligaria a sincronizar dos verdades.
+// ============================================================
+
+// Los estados que las pestanas esconden son exactamente lo que este log muestra
+// (en cartera, v2cVisible() oculta descartado y resuelto).
+const V2LOG_CIERRE_LBL = { resuelto: 'Resuelto', descartado: 'Descartado', archivado: 'Archivado' };
+const V2LOG_TIPO_LBL = {
+  tema: 'tema', hicimos: 'hicimos', cliente: 'cliente', scrapping: 'scrapping',
+  bloqueo: 'bloqueo', accion: 'accion', cuenta: 'cuenta',
+};
+
+async function v2LoadLog() {
+  const body = document.getElementById('v2LogBody');
+  try {
+    const [reg, blo, acc, roll, nombres, exp] = await Promise.all([
+      sb.from('cartera_registro').select('*').eq('estado', 'descartado'),
+      sb.from('cartera_bloqueos').select('*').in('estado', ['descartado', 'resuelto']),
+      sb.from('expansion_acciones').select('*').or('estado.eq.resuelto,estado_draft.eq.descartado'),
+      sb.from('rollouts').select('id,cliente,workspace_id,am_owner,pais,bloqueo_actual,updated_at').eq('archived', true),
+      sb.from('cartera_2500').select('workspace_id,cliente'),
+      sb.from('expansion_top40').select('workspace_id,workspace_name').order('snapshot_date', { ascending: false }).limit(400),
+    ]);
+
+    // Mapa workspace_id -> nombre: las tablas de cartera solo guardan el ws_id.
+    const nom = {};
+    (nombres.data || []).forEach(x => { if (x.cliente) nom[x.workspace_id] = x.cliente; });
+    (exp.data || []).forEach(x => { if (!nom[x.workspace_id] && x.workspace_name) nom[x.workspace_id] = x.workspace_name; });
+    const nombreDe = ws => nom[ws] || ws || '—';
+
+    const filas = [];
+    if (reg.error) console.warn('[v2 log] registro:', reg.error.message);
+    (reg.data || []).forEach(r => filas.push({
+      ts: r.updated_at || r.created_at, nacio: r.created_at, cierre: 'descartado', fuente: 'Cartera 2500',
+      ws: r.workspace_id, cuenta: nombreDe(r.workspace_id), tipo: r.tipo || 'tema',
+      texto: r.texto || '', extra: '', why: r.why || '', quien: r.updated_by || '',
+    }));
+    if (blo.error) console.warn('[v2 log] bloqueos:', blo.error.message);
+    (blo.data || []).forEach(b => filas.push({
+      ts: b.updated_at || b.created_at, nacio: b.primera_vez || b.created_at, cierre: b.estado, fuente: 'Cartera 2500',
+      ws: b.workspace_id, cuenta: nombreDe(b.workspace_id), tipo: 'bloqueo',
+      texto: b.bloqueo || '', extra: b.solucion || '', why: '',
+      quien: b.responsable || b.updated_by || '',
+    }));
+    if (acc.error) console.warn('[v2 log] acciones:', acc.error.message);
+    (acc.data || []).forEach(a => filas.push({
+      ts: a.updated_at || a.created_at, nacio: a.created_at,
+      cierre: a.estado === 'resuelto' ? 'resuelto' : 'descartado',
+      fuente: 'Retención / Expansión', ws: a.workspace_id, cuenta: nombreDe(a.workspace_id),
+      tipo: a.tipo === 'bloqueo' ? 'bloqueo' : 'accion',
+      texto: a.texto || '', extra: '', why: '', quien: a.responsable || a.updated_by || '',
+    }));
+    if (roll.error) console.warn('[v2 log] rollouts:', roll.error.message);
+    (roll.data || []).forEach(r => filas.push({
+      ts: r.updated_at, nacio: null, cierre: 'archivado', fuente: 'Rollout',
+      ws: r.workspace_id, cuenta: r.cliente || nombreDe(r.workspace_id), tipo: 'cuenta',
+      // de un rollout archivado lo unico que queda registrado es con que bloqueo cerro
+      texto: 'Rollout archivado' + (r.pais ? ' · ' + r.pais : ''),
+      extra: '', why: r.bloqueo_actual || '', quien: r.am_owner || '',
+    }));
+
+    // mas reciente arriba; lo que no tiene fecha cae al final
+    filas.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
+    v2Log = filas;
+    v2Loaded.log = true;
+
+    // el select de cuentas se arma con lo que realmente aparece en el log
+    const sel = document.getElementById('v2LogCuenta');
+    if (sel) {
+      const vistas = Array.from(new Set(filas.map(f => f.cuenta))).sort((a, b) => a.localeCompare(b));
+      v2SetHTML(sel, '<option value="">Todas las cuentas</option>' +
+        vistas.map(c => '<option value="' + v2Esc(c) + '">' + v2Esc(c) + '</option>').join(''));
+    }
+    const badge = document.getElementById('v2BadgeLog');
+    if (badge) badge.textContent = filas.length;
+    v2RenderLog();
+  } catch (err) {
+    v2SetHTML(body, '<tr><td colspan="7" class="v2-empty">Error: ' + v2Esc(err.message) + '</td></tr>');
+    console.error('[v2 log]', err);
+  }
+}
+
+function v2LogFecha(ts) {
+  if (!ts) return '<span class="lg-fecha">sin fecha</span>';
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return '<span class="lg-fecha">' + v2Esc(String(ts).slice(0, 10)) + '</span>';
+  const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const hh = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  return '<span class="lg-fecha">' + d.getDate() + '-' + MES[d.getMonth()] +
+    '<br><span class="lg-hora">' + hh + '</span></span>';
+}
+
+// Cuanto estuvo abierto el item antes de cerrarse. Es un dato real (created_at ->
+// updated_at); NO dice si estuvo aprobado en el medio, eso las tablas no lo guardan.
+function v2LogVivio(f) {
+  if (!f.nacio || !f.ts) return '';
+  const a = new Date(f.nacio).getTime(), b = new Date(f.ts).getTime();
+  if (isNaN(a) || isNaN(b) || b < a) return '';
+  const min = Math.round((b - a) / 60000);
+  if (min < 60) return '<div class="lg-hora">vivió ' + min + ' min</div>';
+  const h = Math.round(min / 60);
+  if (h < 48) return '<div class="lg-hora">vivió ' + h + ' h</div>';
+  return '<div class="lg-hora">vivió ' + Math.round(h / 24) + ' d</div>';
+}
+
+function v2RenderLog() {
+  const body = document.getElementById('v2LogBody');
+  if (!v2Log.length) {
+    v2SetHTML(body, '<tr><td colspan="7" class="v2-empty">Todavía no hay nada cerrado ni archivado.</td></tr>');
+    return;
+  }
+  const q = ((document.getElementById('v2LogQ') || {}).value || '').trim().toLowerCase();
+  const fF = (document.getElementById('v2LogFuente') || {}).value || '';
+  const fC = (document.getElementById('v2LogCierre') || {}).value || '';
+  const fA = (document.getElementById('v2LogCuenta') || {}).value || '';
+  const rows = v2Log.filter(f => {
+    if (fF && f.fuente !== fF) return false;
+    if (fC && f.cierre !== fC) return false;
+    if (fA && f.cuenta !== fA) return false;
+    if (q) {
+      const blob = (f.texto + ' ' + f.extra + ' ' + f.why + ' ' + f.cuenta).toLowerCase();
+      if (blob.indexOf(q) === -1) return false;
+    }
+    return true;
+  });
+
+  document.getElementById('v2LogTot').textContent = rows.length.toLocaleString('en-US');
+  document.getElementById('v2LogTotSub').textContent = rows.length === v2Log.length
+    ? 'todo el log' : 'de ' + v2Log.length.toLocaleString('en-US') + ' en total';
+  document.getElementById('v2LogRes').textContent = rows.filter(f => f.cierre === 'resuelto').length;
+  document.getElementById('v2LogDesc').textContent = rows.filter(f => f.cierre === 'descartado').length;
+  // "hoy" y no "ultimos 7 dias": el log arranco esta semana, asi que una ventana de
+  // 7 dias devuelve casi el total y no dice nada.
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const nHoy = rows.filter(f => f.ts && new Date(f.ts).getTime() >= hoy.getTime()).length;
+  document.getElementById('v2Log7').textContent = nHoy;
+  const s7 = document.getElementById('v2Log7Sub');
+  if (s7) {
+    const dias = new Set(rows.filter(f => f.ts).map(f => String(f.ts).slice(0, 10))).size;
+    s7.textContent = dias ? 'en ' + dias + (dias === 1 ? ' día con cierres' : ' días con cierres') : '—';
+  }
+  const sub = document.getElementById('v2LogSub');
+  if (sub) sub.textContent = v2Log.length.toLocaleString('en-US') + ' entradas · Cartera 2500 + Rollout + Retención/Expansión';
+
+  if (!rows.length) {
+    v2SetHTML(body, '<tr><td colspan="7" class="v2-empty">Sin resultados con esos filtros.</td></tr>');
+    return;
+  }
+  const html = rows.map(f => {
+    const sol = f.extra ? '<div class="lg-sol">' + v2Esc(f.extra) + '</div>' : '';
+    const why = f.why ? '<div class="lg-why">' + v2Esc(f.why) + '</div>' : '';
+    return '<tr class="lg-row">' +
+      '<td>' + v2LogFecha(f.ts) + v2LogVivio(f) + '</td>' +
+      '<td><span class="lg-cierre lg-' + f.cierre + '">' + (V2LOG_CIERRE_LBL[f.cierre] || f.cierre) + '</span></td>' +
+      '<td><span class="lg-fuente">' + v2Esc(f.fuente) + '</span></td>' +
+      '<td class="v2-cliente">' + v2Esc(f.cuenta) + '</td>' +
+      '<td><span class="lg-tipo">' + v2Esc(V2LOG_TIPO_LBL[f.tipo] || f.tipo) + '</span></td>' +
+      '<td><div class="lg-txt">' + v2Esc(f.texto) + '</div>' + sol + why + '</td>' +
+      '<td><span class="lg-quien">' + v2Esc(f.quien || '—') + '</span></td>' +
       '</tr>';
   }).join('');
   v2SetHTML(body, html);

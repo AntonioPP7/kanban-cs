@@ -395,8 +395,6 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
 <!-- V2 Tabs -->
 <div class="v2-tabs">
   <div class="v2-tab active" data-v2-tab="ciclo" onclick="v2ShowTab('ciclo')">Ciclo CS</div>
-  <div class="v2-tab" data-v2-tab="rollouts" onclick="v2ShowTab('rollouts')">Rollouts <span class="v2-badge" id="v2BadgeRollouts">0</span></div>
-  <div class="v2-tab" data-v2-tab="healthcheck" onclick="v2ShowTab('healthcheck')">Health Check <span class="v2-badge">Top 30</span></div>
   <div class="v2-tab" data-v2-tab="cartera" onclick="v2ShowTab('cartera')">Cartera 2500</div>
   <div class="v2-tab" data-v2-tab="expansion" onclick="v2ShowTab('expansion')">Retención / Expansión <span class="v2-badge">Portafolio</span></div>
   <div class="v2-tab" data-v2-tab="manualidad" onclick="v2ShowTab('manualidad')">Manualidad</div>
@@ -583,201 +581,6 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
 
 </div><!-- /view-ciclo -->
 
-<!-- V2 View: Rollouts -->
-<div id="view-rollouts" class="v2-view">
-  <div class="v2-toolbar">
-    <div>
-      <h2>Rollouts en arranque</h2>
-      <div class="v2-sub">Clientes enterprise >=1,500 envios/mes. Ordenados por volumen comprometido.</div>
-    </div>
-    <button class="v2-btn" onclick="v2OpenRolloutModal()">+ Nuevo rollout</button>
-  </div>
-  <div class="v2-filters">
-    <select id="v2FilterRolloutAM" onchange="v2RenderRollouts()">
-      <option value="">Todos los AM</option>
-      <option value="Juan Xavier">Juan Xavier</option>
-      <option value="Carlos">Carlos</option>
-    </select>
-    <select id="v2FilterRolloutSem" onchange="v2RenderRollouts()">
-      <option value="">Todos los estados</option>
-      <option value="verde">Verde</option>
-      <option value="amarillo">Amarillo</option>
-      <option value="rojo">Rojo</option>
-    </select>
-    <select id="v2FilterRolloutPais" onchange="v2RenderRollouts()">
-      <option value="">Todos los paises</option>
-    </select>
-  </div>
-  <div class="v2-table-wrap">
-    <table class="v2-table" id="v2RolloutsTable">
-      <thead>
-        <tr>
-          <th>Cliente</th>
-          <th>AM</th>
-          <th>Ventas</th>
-          <th>Pais</th>
-          <th class="num" title="Techo comprometido envios/mes">Techo env</th>
-          <th class="num" title="Proyeccion lineal fin de mes (MTD / dias transcurridos * dias del mes)">Proy MTD</th>
-          <th class="num" title="Techo de locales del cliente">Techo loc</th>
-          <th class="num" title="Locales activos (con envios en los ultimos 14 dias)">Loc act</th>
-          <th>Status</th>
-          <th>Contrato</th>
-          <th>Dossier ejecutivo</th>
-          <th>Bloqueo</th>
-          <th style="width:70px">Estado</th>
-          <th style="width:32px"></th>
-        </tr>
-      </thead>
-      <tbody id="v2RolloutsBody">
-        <tr><td colspan="14" class="v2-empty">Cargando rollouts...</td></tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<!-- V2 View: Health Check -->
-<div id="view-healthcheck" class="v2-view">
-  <div class="v2-toolbar">
-    <div>
-      <h2>Health Check — Top 30 clientes</h2>
-      <div class="v2-sub" id="v2HCSnapshotDate">Snapshot: —</div>
-    </div>
-    <div class="v2-filters">
-      <select id="v2FilterHCAM" onchange="v2RenderHealthCheck()">
-        <option value="">Todos los AM</option>
-        <option value="Juan Xavier">Juan Xavier</option>
-        <option value="Carlos">Carlos</option>
-      </select>
-      <select id="v2FilterHCSem" onchange="v2RenderHealthCheck()">
-        <option value="">Todos</option>
-        <option value="verde">Verde</option>
-        <option value="amarillo">Amarillo</option>
-        <option value="rojo">Rojo</option>
-      </select>
-    </div>
-  </div>
-
-  <div class="v2-kpi-row" id="v2HCKpis">
-    <div class="v2-kpi"><div class="v2-kpi-label">Clientes Top 30</div><div class="v2-kpi-value" id="v2KpiTotal">—</div><div class="v2-kpi-sub">del portafolio CS</div></div>
-    <div class="v2-kpi warn"><div class="v2-kpi-label">Alertas abiertas</div><div class="v2-kpi-value" id="v2KpiAlertas">—</div><div class="v2-kpi-sub" id="v2KpiAlertasSub">—</div></div>
-    <div class="v2-kpi danger"><div class="v2-kpi-label">Clientes en rojo</div><div class="v2-kpi-value" id="v2KpiRojos">—</div><div class="v2-kpi-sub" id="v2KpiRojosSub">—</div></div>
-    <div class="v2-kpi"><div class="v2-kpi-label">Revenue Top 30</div><div class="v2-kpi-value" id="v2KpiRev">—</div><div class="v2-kpi-sub">USD Q vigente</div></div>
-  </div>
-
-  <div class="v2-table-wrap">
-    <table class="v2-table" id="v2HCTable">
-      <thead>
-        <tr>
-          <th class="v2-tooltip v2-sortable" data-sort-key="rank" data-tooltip="Ranking por Revenue Q1 2026 segun NDR Anexo A (congelado hasta Q2 - lista blanca de retencion/expansion).">#<span class="v2-sort-indicator"></span></th>
-          <th class="v2-tooltip v2-sortable" data-sort-key="workspace_name" data-tooltip="Nombre de cuenta segun NDR. Badge CHURN/PRE-CHURN aparece cuando se marca manualmente desde el modal de edicion.">Cliente<span class="v2-sort-indicator"></span></th>
-          <th class="v2-tooltip v2-sortable" data-sort-key="am_owner" data-tooltip="Account Manager responsable en CS.">AM<span class="v2-sort-indicator"></span></th>
-          <th style="width:50px" class="v2-tooltip" data-tooltip="Preguntas Cinicas AI generadas por Claude Haiku cada lunes 8:30 AM. 3 preguntas growth-focused para el AM. Click para abrir modal.">&#129302;</th>
-          <th class="v2-tooltip v2-sortable" data-sort-key="pais" data-tooltip="Pais del cliente. Inferido por currency en silver.tsr (MXN->MX, COP->CO, etc).">Pais<span class="v2-sort-indicator"></span></th>
-          <th style="width:70px" class="v2-tooltip v2-sortable" data-sort-key="semaforo" data-tooltip="Verde >=8.8 | Amarillo 7.0-8.8 | Rojo <7.0 o sin data. Basado en healthscore.">Estado<span class="v2-sort-indicator"></span></th>
-          <th class="num v2-tooltip v2-sortable" data-sort-key="healthscore" data-tooltip="Healthscore (0-10) ultimo snapshot. Trend = avg ultimos 7 dias vs avg 7 dias previos. Fuente: gold.v_workspace_health.">Health<span class="v2-sort-indicator"></span></th>
-          <th class="num v2-tooltip v2-sortable" data-sort-key="engagement_score" data-tooltip="Engagement Score (0-10) de Picker Hub (public.workspaces.latest_engagement). Mide adopcion de funcionalidades. Trend = avg 7d vs 7d previos (acumula desde 22-may-2026).">Engagement<span class="v2-sort-indicator"></span></th>
-          <th class="v2-tooltip v2-sortable" data-sort-key="alertas_abiertas" data-tooltip="Alertas abiertas (status active + in_progress). Las criticas se resaltan en rojo (severity=critical).">Alertas<span class="v2-sort-indicator"></span></th>
-          <th class="num v2-tooltip v2-sortable" data-sort-key="rides_mtd" data-tooltip="Completed rides del mes en curso (dia 1 hasta hoy). Fuente: gold.v_booking_detail.">Rides MTD<span class="v2-sort-indicator"></span></th>
-          <th class="num v2-tooltip v2-sortable" data-sort-key="rides_ytd" data-tooltip="Completed rides del anio en curso (1 ene hasta hoy).">Rides YTD<span class="v2-sort-indicator"></span></th>
-          <th class="num v2-tooltip v2-sortable" data-sort-key="rides_sem_ant" id="v2HCRidesSemAntHeader" data-tooltip="Completed rides de la semana anterior cerrada (lun-dom ISO).">Rides sem ant<span class="v2-sort-indicator"></span></th>
-          <th class="num v2-tooltip v2-sortable" data-sort-key="delta_semana_ant_pct" data-tooltip="Variacion % de rides: semana actual WTD proyectada a 7d vs semana anterior completa (lun-dom ISO).">Δ sem actual <small style="font-weight:400;text-transform:none">(proy)</small><span class="v2-sort-indicator"></span></th>
-          <th class="num v2-tooltip v2-sortable" data-sort-key="delta_12sem_pct" data-tooltip="Variacion % de rides: semana anterior completa vs promedio de las 12 semanas previas a ella.">Δ 12s <small style="font-weight:400;text-transform:none">(sem ant)</small><span class="v2-sort-indicator"></span></th>
-          <th class="num v2-tooltip v2-sortable" data-sort-key="fr_sem_actual_pct" id="v2HCFrActualHeader" data-tooltip="Fulfillment rate de la semana en curso WTD (completed / total bookings), con variacion en puntos porcentuales vs %FR de la semana anterior cerrada.">%FR sem actual<span class="v2-sort-indicator"></span></th>
-          <th class="num v2-tooltip v2-sortable" data-sort-key="costo_opp_mtd_pct" data-tooltip="Costo oportunidad MTD: % del billing Picker absorbido en penalidades (costo_cancelacion + costo_retorno + costo_wt). Fuente: cfo.base_maestra_mat. Si la fuente no ha consolidado el mes, se muestra ⚠️.">Costo Opp MTD<span class="v2-sort-indicator"></span></th>
-          <th class="num v2-tooltip v2-sortable" data-sort-key="costo_opp_ytd_pct" data-tooltip="Costo oportunidad YTD: % del billing Picker absorbido en penalidades. Fuente: cfo.base_maestra_mat. Anio en curso.">Costo Opp YTD<span class="v2-sort-indicator"></span></th>
-          <th class="num v2-tooltip v2-sortable" data-sort-key="take_rate_mtd_pct" data-tooltip="Take rate MTD: SUM(billing Picker) / SUM(order value del cliente). Solo bookings con orden>0, en USD. Muestra '—' si cobertura de orden <20%.">Take Rate MTD<span class="v2-sort-indicator"></span></th>
-          <th class="num v2-tooltip v2-sortable" data-sort-key="take_rate_ytd_pct" data-tooltip="Take rate YTD: SUM(billing Picker) / SUM(order value del cliente). Solo bookings con orden>0, en USD.">Take Rate YTD<span class="v2-sort-indicator"></span></th>
-          <th class="v2-tooltip" data-tooltip="Campo libre del AM. Se guarda inline al hacer blur.">Comentario ejecutivo</th>
-        </tr>
-      </thead>
-      <tbody id="v2HCBody">
-        <tr><td colspan="20" class="v2-empty">Cargando health check...</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <!-- WATCHLIST: top 15 fuera del Top 30 oficial que ya superan el piso de bookings completados MTD proyectado -->
-  <div class="v2-table-wrap" style="margin-top:24px">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-      <h3 style="margin:0;color:var(--azul-oscuro-900);font-size:15px">Watchlist — Top 15 fuera del Top 30 oficial</h3>
-      <span class="v2-pill" style="background:#fdba74;color:#7c2d12;border:1px solid #fb923c;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em">Watchlist</span>
-      <span class="v2-sub" id="v2WatchlistSnapshotDate" style="font-size:11px;color:var(--neutral-800)">Snapshot: —</span>
-      <button class="v2-btn v2-btn-sec" style="margin-left:auto;font-size:11px" onclick="v2ToggleWatchlist()" id="v2WatchlistToggle">Ocultar</button>
-    </div>
-    <div id="v2WatchlistContainer">
-    <table class="v2-table" id="v2WatchlistTable">
-      <thead>
-        <tr>
-          <th title="Ranking dinamico por bookings completados MTD proyectados a fin de mes (lineal).">#</th>
-          <th title="Workspace en el DW. Excluye los que ya estan en Top 30 oficial (lista blanca Q vs Q) y rollouts cubiertos.">Cliente</th>
-          <th style="width:50px" title="Preguntas Cinicas AI growth-focused. Generadas diariamente por Claude Haiku.">&#129302;</th>
-          <th>Pais</th>
-          <th class="num" title="COMPLETED bookings del mes en curso (dia 1 hasta hoy).">Comp MTD</th>
-          <th class="num" title="Proyeccion lineal a fin de mes: comp_mtd * dias_mes / dias_transcurridos.">Proj MTD</th>
-          <th class="num" title="Fulfillment rate MTD (completed / total).">%FF MTD</th>
-          <th class="num" title="Facturacion mensual del workspace en USD (mrr_revenue o, si es usage-based, revenue del mes), via silver.exchange_rates.">Fact./mes USD</th>
-          <th class="num" title="Health score 0-10 (gold.v_workspace_health, ultimo periodo monthly).">Health</th>
-          <th class="num" title="Churn risk % rolling 12 semanas.">Churn%</th>
-          <th title="Fecha del ultimo booking registrado en el DW.">Ultimo bk</th>
-          <th title="UUID del CS owner asignado en el DW (NULL = sin AM).">CS Owner</th>
-        </tr>
-      </thead>
-      <tbody id="v2WatchlistBody">
-        <tr><td colspan="12" class="v2-empty">Cargando watchlist...</td></tr>
-      </tbody>
-    </table>
-    <div style="font-size:11px;color:var(--neutral-800);margin-top:6px">
-      Sync diario 8:00 AM (<code>Picker_WatchlistSync</code>). Criterio: MTD proyectado &gt;= piso del Top 30, facturacion &gt; 0 (mrr o revenue), no esta en Top 30 ni cubierto por rollouts/multi-sucursal.
-    </div>
-    </div>
-  </div>
-
-  <!-- CHURN / PRE-CHURN: cuentas Top 30 marcadas manualmente como en riesgo o perdidas -->
-  <div class="v2-table-wrap" style="margin-top:24px">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-      <h3 style="margin:0;color:var(--azul-oscuro-900);font-size:15px">Cuentas Churn / Pre-Churn</h3>
-      <span class="v2-pill" style="background:#fecaca;color:#7f1d1d;border:1px solid #dc2626;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em">Riesgo</span>
-      <span class="v2-sub" id="v2ChurnCount" style="font-size:11px;color:var(--neutral-800)">0 cuentas marcadas</span>
-      <button class="v2-btn v2-btn-sec" style="margin-left:auto;font-size:11px" onclick="v2ToggleChurn()" id="v2ChurnToggle">Ocultar</button>
-    </div>
-    <div id="v2ChurnContainer">
-    <table class="v2-table" id="v2ChurnTable">
-      <thead>
-        <tr>
-          <th class="v2-tooltip" data-tooltip="Ranking original en el Top 30.">#</th>
-          <th class="v2-tooltip" data-tooltip="Cuenta marcada manualmente como churn / pre-churn / recovered.">Cliente</th>
-          <th class="v2-tooltip" data-tooltip="Estado actual: pre-churn (alerta temprana), churned (perdida), recovered (recuperada).">Estado churn</th>
-          <th class="v2-tooltip" data-tooltip="Razon registrada al marcar.">Razon</th>
-          <th class="v2-tooltip" data-tooltip="Fecha y hora del ultimo cambio de estado.">Actualizado</th>
-          <th class="v2-tooltip" data-tooltip="AM responsable en el Top 30.">AM</th>
-          <th class="num v2-tooltip" data-tooltip="Healthscore actual (referencia).">Health</th>
-          <th class="num v2-tooltip" data-tooltip="Engagement actual.">Eng</th>
-          <th class="num v2-tooltip" data-tooltip="Rides MTD para contexto.">Rides MTD</th>
-        </tr>
-      </thead>
-      <tbody id="v2ChurnBody">
-        <tr><td colspan="9" class="v2-empty">Sin cuentas marcadas. Editar churn_status desde el modal de cada card del Top 30.</td></tr>
-      </tbody>
-    </table>
-    </div>
-  </div>
-
-  <div class="v2-ops-box" style="margin-top:24px">
-    <h3>Operativo 24h — reporte Camilo / Stephanie</h3>
-    <div class="v2-ops-row">
-      <div>
-        <label>Pedidos fallidos ultimas 24h</label>
-        <textarea id="v2OpsFallidos" placeholder="Ej: 147 / 8,902 totales - 1.65% UFR - Pico 14-16h en Quito"></textarea>
-      </div>
-      <div>
-        <label>Ciudades bajo umbral / patrones recurrentes</label>
-        <textarea id="v2OpsCiudades" placeholder="Ej: Medellin PedidosYa 78% - Guayaquil fleet stuck BK 3 bookings"></textarea>
-      </div>
-    </div>
-    <div style="margin-top:10px;display:flex;justify-content:flex-end"><button class="v2-btn" onclick="v2SaveOpsNotes()">Guardar notas</button> <span id="v2OpsStatus" style="margin-left:10px;font-size:11px;color:var(--neutral-800);align-self:center"></span></div>
-  </div>
-</div>
-
 <!-- V2 View: Cartera 2500 (v2 — editable) -->
 <div id="view-cartera" class="v2-view">
   <style>
@@ -886,6 +689,8 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
   #view-expansion .fresh-ok{background:#e3f5e8;color:#1b7a2e}
   #view-expansion .fresh-tibio{background:#fef3c7;color:#92400e}
   #view-expansion .fresh-viejo{background:#fbe6e3;color:#c0392b}
+  /* semaforo de maduracion por tarjeta (reusa la paleta de frescura del plan) */
+  #view-expansion .v2e-mad{margin-right:2px;cursor:help;flex:0 0 auto}
   #view-expansion .fresh-nada{background:#e2e8f0;color:#64748b}
   #view-expansion .v2e-draft{background:#efe9fd;color:#6b46c1;font-size:9px;font-weight:800;padding:1px 5px;border-radius:7px;text-transform:uppercase}
   #view-expansion .v2e-btn{font-family:inherit;font-size:10px;font-weight:700;padding:3px 10px;border:none;border-radius:4px;cursor:pointer;transition:.15s}
@@ -1180,23 +985,6 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
   </div>
 </div>
 
-<!-- V2 Modal: Preguntas Cinicas AI -->
-<div class="v2-modal-bg" id="v2PreguntasModal" onclick="if(event.target===this)v2ClosePreguntasModal()">
-  <div class="v2-modal" style="width:680px;max-width:94vw">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-      <h3 style="margin:0;flex:1;color:var(--azul-oscuro-900);font-size:16px" id="v2PreguntasTitle">Preguntas Cinicas AI</h3>
-      <button class="v2-btn v2-btn-sec" style="font-size:11px" onclick="v2ClosePreguntasModal()">Cerrar</button>
-    </div>
-    <div id="v2PreguntasMeta" style="font-size:11px;color:var(--neutral-800);margin-bottom:12px"></div>
-    <div id="v2PreguntasBody" style="font-size:13px;line-height:1.6;color:var(--azul-oscuro-900)">
-      <em>Cargando...</em>
-    </div>
-    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--neutral-200);font-size:10px;color:var(--neutral-800)">
-      Generado por Claude Haiku 4.5 cada lunes 8:30 AM. Tono cinico intencional — el AM responde con datos, no con excusas.
-    </div>
-  </div>
-</div>
-
 <!-- V2 View: Log — archivado y resuelto de Cartera 2500, Rollouts y Retencion/Expansion -->
 <div id="view-log" class="v2-view">
   <div class="v2-toolbar">
@@ -1256,55 +1044,6 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
     rechazó al revisar la cola, no cosas que se hicieron y después se tiraron. Las tablas no guardan si un item pasó por
     aprobado antes de cerrarse, así que el log no puede separar esos dos casos. <b>Resuelto</b> sí es cierre real de un
     bloqueo. El <em>vivió</em> junto a la fecha dice cuánto estuvo abierto antes de cerrarse.
-  </div>
-</div>
-
-<!-- V2 Modal: Nuevo/Editar Rollout -->
-<div class="v2-modal-bg" id="v2RolloutModal">
-  <div class="v2-modal">
-    <h3 id="v2RolloutModalTitle">Nuevo rollout</h3>
-    <input type="hidden" id="v2RolloutId">
-    <div class="v2-form-row">
-      <div class="v2-form-full"><label>Cliente *</label><input type="text" id="v2rf_cliente" required></div>
-    </div>
-    <div class="v2-form-row">
-      <div><label>AM Owner *</label><select id="v2rf_am"><option value="Juan Xavier">Juan Xavier</option><option value="Carlos">Carlos</option></select></div>
-      <div><label>Ventas Owner</label><select id="v2rf_ventas"><option value="">—</option><option>Ricardo</option><option>JD</option><option>Antonio</option></select></div>
-    </div>
-    <div class="v2-form-row">
-      <div><label>Pais</label><input type="text" id="v2rf_pais"></div>
-      <div><label>Envios/mes target</label><input type="number" id="v2rf_envios"></div>
-    </div>
-    <div class="v2-form-row">
-      <div><label>Locales totales</label><input type="number" id="v2rf_loc_tot"></div>
-      <div><label>Locales piloto</label><input type="number" id="v2rf_loc_pil"></div>
-    </div>
-    <div class="v2-form-row">
-      <div><label>Mes arranque</label><input type="text" id="v2rf_mes" placeholder="Enero / Febrero / TBD"></div>
-      <div><label>Fecha 1er pedido target</label><input type="date" id="v2rf_fecha"></div>
-    </div>
-    <div class="v2-form-row">
-      <div><label>Status integracion</label><select id="v2rf_status"><option value="">—</option><option>api</option><option>flota</option><option>tarifario</option><option>listo</option><option>bloqueado</option><option>piloto</option><option>seguimiento</option><option>comercial</option><option>arrancado</option></select></div>
-      <div><label>Contrato</label><select id="v2rf_contrato"><option value="">—</option><option>firmado</option><option>pendiente</option><option>por_firmar</option></select></div>
-    </div>
-    <div class="v2-form-row">
-      <div class="v2-form-full"><label>Semaforo</label><select id="v2rf_sem"><option value="verde">Verde</option><option value="amarillo">Amarillo</option><option value="rojo">Rojo</option></select></div>
-    </div>
-    <div class="v2-form-row">
-      <div class="v2-form-full"><label>Dossier ejecutivo</label><textarea id="v2rf_dossier"></textarea></div>
-    </div>
-    <div class="v2-form-row">
-      <div class="v2-form-full"><label>Bloqueo actual</label><input type="text" id="v2rf_bloqueo"></div>
-    </div>
-    <div class="v2-form-row">
-      <div><label>Hubspot URL</label><input type="url" id="v2rf_hubspot"></div>
-      <div><label>Alongside URL</label><input type="url" id="v2rf_alongside"></div>
-    </div>
-    <div class="v2-modal-actions">
-      <button class="v2-btn v2-btn-sec" onclick="v2CloseRolloutModal()">Cancelar</button>
-      <button class="v2-btn v2-btn-sec" id="v2RolloutDelBtn" style="color:var(--rojo);display:none" onclick="v2DeleteRollout()">Eliminar</button>
-      <button class="v2-btn" onclick="v2SaveRollout()">Guardar</button>
-    </div>
   </div>
 </div>
 

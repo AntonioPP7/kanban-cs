@@ -312,6 +312,24 @@ function v2cDelta(v) {
 }
 function v2cSem(d) { return d == null ? '' : d <= 14 ? 'g' : d <= 45 ? 'a' : 'r'; }
 
+// dias_sin_cliente lo calcula el sync mirando SOLO Fathom, y el Fathom conectado es el de
+// Antonio. Una cuenta atendida por WhatsApp o por un AM cuyo Fathom no esta conectado salia
+// en rojo aunque estuviera atendida (Pollo Pepe: 86 dias con contacto de hace 15). El contacto
+// manual vive en cartera_whatsapp y no movia el numero. Aqui gana el MAS RECIENTE de los dos.
+// La fecha de referencia se reconstruye como (ultima_reunion + dias_sin_cliente) en vez de
+// usar hoy: asi el numero no se corre entre snapshots ni depende de la hora del navegador.
+function v2cDias(p, wa) {
+  const dr = p.dias_sin_cliente, fr = p.ultima_reunion_cliente;
+  const wc = wa && wa.ultimo_contacto;
+  if (!wc || (fr && wc <= fr)) return { d: dr, fuente: 'reunion', fecha: fr };
+  const MS = 86400000;
+  const ref = (fr && dr != null)
+    ? new Date(fr + 'T00:00:00Z').getTime() + dr * MS
+    : Date.now();
+  const d = Math.max(0, Math.round((ref - new Date(wc + 'T00:00:00Z').getTime()) / MS));
+  return { d, fuente: 'wa', fecha: wc };
+}
+
 // item cualitativo editable (tema/hicimos/cliente)
 function v2cQItem(r) {
   const est = r.estado || 'draft';
@@ -400,7 +418,7 @@ function v2RenderCartera() {
     const pot = p.potencial, gan = p.por_ganar, cap = p.captura_pct;
     T.rj += rj || 0; T.rp += rp || 0; T.vj += vj || 0; T.vp += vp || 0; T.techo += techo || 0;
     if (pot != null) { T.pot += pot; T.gan += gan || 0; }
-    const dias = p.dias_sin_cliente;
+    const dc = v2cDias(p, a.wa), dias = dc.d;
     return '<tr>' +
       '<td class="s0">' + (i + 1) + '</td>' +
       '<td class="s1 l"><span class="v2c-cta">' + v2Esc(p.cliente) + '</span><span class="v2c-am">' + v2Esc(p.am_registro || '') + ' · ' + v2Esc(p.workspace_id) + (p.am_mismatch ? ' · <span style="color:#c0392b">≠ asiste ' + v2Esc(p.am_real || '') + '</span>' : '') + '</span></td>' +
@@ -412,8 +430,9 @@ function v2RenderCartera() {
       '<td class="tch">' + (techo == null ? '<span class="v2c-na">s/t</span>' : v2Num(techo)) + '</td><td class="tch">' + (dist == null ? '<span class="v2c-na">—</span>' : v2Num(dist)) + '</td>' +
       '<td class="tch">' + (pot != null ? '$' + v2Num(Math.round(pot)) : '<span class="v2c-na">n/c</span>') + '</td>' +
       '<td class="gan"><span class="n">' + (gan != null ? '$' + v2Num(Math.round(gan)) : '<span class="v2c-na">n/c</span>') + '</span>' + (cap != null ? '<div style="font-size:9px;color:#5f7c8c">' + cap.toFixed(1) + '%</div>' : '') + '</td>' +
-      '<td class="l" style="color:#8a96aa">' + v2Esc(p.ultima_reunion_cliente || '—') + '</td>' +
-      '<td><span class="dias ' + v2cSem(dias) + '">' + (dias == null ? '—' : dias) + '</span></td>' +
+      '<td class="l" style="color:#8a96aa">' + v2Esc(dc.fecha || '—') +
+        (dc.fuente === 'wa' ? ' <span title="Contacto manual (WhatsApp/operativo), no reunión grabada en Fathom. Última reunión: ' + v2Esc(p.ultima_reunion_cliente || 'sin registro') + '" style="color:#00b8eb;font-weight:700;cursor:help">wa</span>' : '') + '</td>' +
+      '<td><span class="dias ' + v2cSem(dias) + '" ' + (dc.fuente === 'wa' ? 'title="Cuenta desde contacto manual, no desde reunión grabada"' : '') + '>' + (dias == null ? '—' : dias) + '</span></td>' +
       '<td class="l" style="font-size:10px">' + (p.proxima_reunion ? '<span style="color:#1b7a2e;font-weight:700">' + v2Esc(p.proxima_reunion) + '</span>' : '<span class="v2c-na">nada agendado</span>') + '</td>' +
       '<td class="pulso">' + v2cPulso(p) + '</td>' +
       '<td class="l v2c-xtra"><div class="qwrap">' + v2cQList(a.reg, 'tema', p.workspace_id) + '</div></td>' +

@@ -448,18 +448,39 @@ function v2RenderCartera() {
   // ---- Objetivos (arriba de la tabla) ----
   const setBar = (id, pct, ok) => { const el = document.getElementById(id); if (el) { el.style.width = Math.max(0, Math.min(pct, 100)).toFixed(0) + '%'; el.style.background = ok ? '#1b7a2e' : (pct >= 60 ? '#00b8eb' : '#a9760a'); } };
   const set = (id, html) => { const el = document.getElementById(id); if (el) v2SetHTML(el, html); };
+  // Cierre de junio 2026 = ultimo mes del Q2 y base FIJA del objetivo trimestral.
+  // Tomado del ultimo snapshot en que el sync todavia reportaba junio como mes anterior
+  // (cartera_pulso / cartera_2500 del 26-jul-2026). NO se calcula en runtime a proposito:
+  // rev_ant/mes_ant ruedan al cerrar cada mes -- el 2-ago pasaron solos a julio
+  // ($36,909 / 10,665) y el objetivo del trimestre se quedo sin ancla, ademas de que el
+  // subtitulo seguia rotulando ese julio como "base jun".
+  const BASE_Q2 = { rev: 34950, rides: 10171 };
+  const fmtD = (v, pre) => (v >= 0 ? '+' : '−') + (pre || '') + v2Num(Math.abs(Math.round(v)));
+  const tone = v => v >= 0 ? '#1b7a2e' : '#c0392b';
+  const alt = html => ' <span style="color:#8a96aa;font-weight:600">· ' + html + '</span>';
+
+  // (1) Rides: la definicion canonica del tracker es crecimiento MENSUAL agregado
+  // (proy cierre - mes anterior completo), asi que el numero grande sigue mes a mes.
+  // La lectura trimestral va de apoyo.
   const crecR = T.rp - T.rj, metaR = 2500, pR = crecR / metaR * 100, okR = crecR >= metaR;
-  set('v2cObjRidesVal', (crecR >= 0 ? '+' : '−') + v2Num(Math.abs(crecR)) + ' <small>/ +' + v2Num(metaR) + ' rides</small>');
+  const crecRq = T.rp - BASE_Q2.rides;
+  set('v2cObjRidesVal', fmtD(crecR) + ' <small>/ +' + v2Num(metaR) + ' rides</small>');
   setBar('v2cObjRidesBar', pR, okR);
-  set('v2cObjRidesSub', okR
-    ? '<span style="color:#1b7a2e">✓ CUMPLE (' + pR.toFixed(0) + '%)</span>'
-    : '<span style="color:#a9760a">' + pR.toFixed(0) + '% · faltan ' + v2Num(metaR - crecR) + ' rides</span>');
-  const nuevoRev = T.vp - T.vj, metaV = 180000, pV = nuevoRev / metaV * 100, okV = nuevoRev >= metaV;
-  set('v2cObjRevVal', (nuevoRev >= 0 ? '+' : '−') + '$' + v2Num(Math.abs(Math.round(nuevoRev))) + ' <small>/ +$' + v2Num(metaV) + ' nuevos</small>');
+  set('v2cObjRidesSub',
+    (okR ? '<span style="color:#1b7a2e">✓ CUMPLE (' + pR.toFixed(0) + '%)</span>'
+         : '<span style="color:#a9760a">' + pR.toFixed(0) + '% · faltan ' + v2Num(metaR - crecR) + ' rides</span>')
+    + alt('vs cierre Q2 (jun ' + v2Num(BASE_Q2.rides) + '): <b style="color:' + tone(crecRq) + '">' + fmtD(crecRq) + '</b>'));
+
+  // (2) Revenue: el objetivo es "+$180k de nuevo run-rate al 30-sep VS JUNIO" -> base fija.
+  // El numero grande va contra BASE_Q2; el ritmo mes a mes queda como segunda lectura.
+  const nuevoRev = T.vp - BASE_Q2.rev, metaV = 180000, pV = nuevoRev / metaV * 100, okV = nuevoRev >= metaV;
+  const ritmoV = T.vp - T.vj;
+  set('v2cObjRevVal', fmtD(nuevoRev, '$') + ' <small>/ +$' + v2Num(metaV) + ' nuevos</small>');
   setBar('v2cObjRevBar', pV, okV);
-  set('v2cObjRevSub', okV
-    ? '<span style="color:#1b7a2e">✓ CUMPLE</span>'
-    : '<span style="color:#c0392b">' + pV.toFixed(0) + '% · faltan $' + v2Num(Math.round(metaV - nuevoRev)) + '</span> <span style="color:#8a96aa;font-weight:600">· base jun $' + v2Num(Math.round(T.vj)) + '</span>');
+  set('v2cObjRevSub',
+    (okV ? '<span style="color:#1b7a2e">✓ CUMPLE</span>'
+         : '<span style="color:#c0392b">' + pV.toFixed(1) + '% · faltan $' + v2Num(Math.round(metaV - nuevoRev)) + '</span>')
+    + alt('base jun $' + v2Num(BASE_Q2.rev) + ' · ritmo vs mes ant: <b style="color:' + tone(ritmoV) + '">' + fmtD(ritmoV, '$') + '</b>'));
 
   const capT = T.pot ? T.vp / T.pot * 100 : 0;
   v2SetHTML(foot, '<tr>' +

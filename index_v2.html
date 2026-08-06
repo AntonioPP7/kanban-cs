@@ -638,6 +638,7 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
   #view-cartera .qage{font-size:8.5px;color:#9aa6b8;font-weight:700;margin-left:4px;white-space:nowrap}
   #view-cartera .badge{display:inline-block;padding:1px 6px;border-radius:9px;font-size:8.5px;font-weight:800}
   #view-cartera .badge.hecho{background:#e3f5e8;color:#1b7a2e}#view-cartera .badge.reco{background:#efe9fd;color:#6b46c1}
+  #view-cartera .badge.senal{background:#fdf0d5;color:#a9760a}#view-cartera .badge.churn{background:#fde8e8;color:#c0392b}#view-cartera .badge.cross{background:#e0f2fe;color:#0369a1}
   #view-cartera .bx{border:1px solid #e8d9d6;border-radius:5px;margin-bottom:6px;background:#fffdfd;overflow:hidden}
   #view-cartera .bx.draft{border-color:#f0e2c0}#view-cartera .bx.confirmado{border-color:#cfe8d5}#view-cartera .bx.descartado{opacity:.45}
   #view-cartera .bx-h{padding:4px 7px;background:#fdf3f2;display:flex;gap:4px;align-items:flex-start}
@@ -753,8 +754,11 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
     </div>
     <span class="v2c-hint" id="v2cHint"><b>Gerencial:</b> volumen, valor por pedido, techo y contacto. Una línea por cuenta.</span>
     <label style="font-size:11.5px;color:#4a5b85;display:flex;align-items:center;gap:5px;margin-left:auto;cursor:pointer">
-      <input type="checkbox" id="v2cHistChk" onchange="v2CartToggleHist(this.checked)"> Mostrar histórico (resueltos/descartados)
+      <input type="checkbox" id="v2cHistChk" onchange="v2CartToggleHist(this.checked)"> Mostrar histórico (archivados/descartados)
     </label>
+    <button class="qbtn" style="margin-left:10px" onclick="v2CartArchivar(null)"
+            title="Manda al Log lo que quedó vivo en las columnas cualitativas de las 9 cuentas. Los bloqueos NO se tocan. Corre solo cada viernes 18:05.">
+      Archivar semana (todas)</button>
   </div>
 
   <div class="v2c-obj">
@@ -782,27 +786,25 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
           <th colspan="3">Revenue USD</th>
           <th colspan="3">Valor por pedido</th>
           <th colspan="4">Techo y upside</th>
-          <th colspan="4">Contacto</th>
+          <th colspan="5">Contacto</th>
           <th class="v2c-xtra" colspan="3">Registro de actividad</th>
           <th class="v2c-xtra" colspan="1">Bloqueo → solución</th>
-          <th class="v2c-xtra" colspan="1">Scrapping</th>
-          <th class="v2c-xtra" colspan="1">WhatsApp</th>
+          <th class="v2c-xtra" colspan="1">Out Of The Box y Anticipatorios</th>
         </tr>
         <tr>
           <th>Mes ant</th><th>Proy.</th>
           <th>Mes ant</th><th>Proy.</th><th>Δ $</th>
           <th>Mes ant</th><th>Proy.</th><th>Δ %</th>
           <th>Techo</th><th>Dist.</th><th>Potencial</th><th>Por ganar</th>
-          <th class="l">Últ.</th><th>Días</th><th class="l">Próxima</th><th class="l">★ Pulso 90d</th>
+          <th class="l">Últ.</th><th>Días</th><th class="l">Manual</th><th class="l">Próxima</th><th class="l">★ Pulso 90d</th>
           <th class="l v2c-xtra" style="min-width:230px">Top temas</th>
           <th class="l v2c-xtra" style="min-width:200px">Qué hicimos</th>
           <th class="l v2c-xtra" style="min-width:200px">Qué hizo el cliente</th>
           <th class="l v2c-xtra" style="min-width:320px">Bloqueo · solución · resp. · deadline</th>
-          <th class="l v2c-xtra" style="min-width:270px">Scrapping</th>
-          <th class="l v2c-xtra" style="min-width:150px">Contacto manual</th>
+          <th class="l v2c-xtra" style="min-width:290px">Señal · riesgo · lo que funcionó en otra cuenta</th>
         </tr>
       </thead>
-      <tbody id="v2CarteraBody"><tr><td colspan="17" class="v2-empty">Cargando cartera...</td></tr></tbody>
+      <tbody id="v2CarteraBody"><tr><td colspan="24" class="v2-empty">Cargando cartera...</td></tr></tbody>
       <tfoot id="v2CarteraFoot"></tfoot>
     </table>
   </div></div>

@@ -229,7 +229,9 @@ function v2cBar(table, estado, isBloqueo, ts) {
   const age = ts ? '<span class="qage">' + v2cAge(ts) + '</span>' : '';
   return '<div class="qi-bar"><span class="qbadge ' + estado + '">' + lbl + '</span>' + age + btns + '</div>';
 }
-function v2cVisible(x) { return v2cShowHist || (x.estado !== 'descartado' && x.estado !== 'resuelto'); }
+// 'archivado' = caduco al cierre de semana y vive en el Log. Se oculta como el resto
+// del historico, pero NO es un descarte: el prompt de la IA los distingue.
+function v2cVisible(x) { return v2cShowHist || (x.estado !== 'descartado' && x.estado !== 'resuelto' && x.estado !== 'archivado'); }
 
 // ---- helpers de cache/foco (evitan que un re-render pise ediciones o el scroll) ----
 // busca la fila en el cache local por id; sin esto el render repinta el valor viejo
@@ -350,9 +352,12 @@ function v2cScrap(items, ws) {
   const xs = items.filter(x => x.tipo === 'scrapping' && v2cVisible(x));
   const body = !xs.length ? '<span class="v2c-na">—</span>' : xs.map(r => {
     const est = r.estado || 'draft';
-    const b = r.badge === 'hecho' ? 'hecho' : 'reco';
+    // hecho/recomendado son los badges viejos: 68 items historicos los usan y siguen
+    // renderizando igual. senal/churn/cross son las 3 categorias nuevas.
+    const B = { senal: 'SEÑAL', churn: 'RIESGO', cross: 'CROSS', hecho: 'HECHO', recomendado: 'RECOMENDADO' };
+    const b = B[r.badge] ? (r.badge === 'recomendado' ? 'reco' : r.badge) : 'reco';
     return '<div class="qi ' + est + '" data-id="' + r.id + '">' +
-      '<span class="badge ' + b + '">' + (b === 'hecho' ? 'HECHO' : 'RECOMENDADO') + '</span> ' +
+      '<span class="badge ' + b + '">' + (B[r.badge] || 'RECOMENDADO') + '</span> ' +
       '<span class="qtext" contenteditable="true" onblur="v2CartSaveText(this,\'cartera_registro\',\'texto\')">' + v2Esc(r.texto) + '</span>' +
       (r.why ? '<div style="font-size:9px;color:#8a7fae;margin-top:3px">' + v2Esc(r.why) + '</div>' : '') +
       v2cBar('cartera_registro', est, false, r.updated_at || r.created_at) + '</div>';
@@ -378,6 +383,17 @@ function v2cBloqs(items, ws) {
       '<span style="margin-left:auto">' + v2cBar('cartera_bloqueos', est, true, b.updated_at || b.created_at) + '</span></div></div>';
   }).join('');
   return body + v2cAddBtn(ws, null, true);
+}
+// Contacto manual. Antes vivia en una columna propia al final de la tabla; se movio
+// dentro del bloque Contacto, al lado del numero de dias que este dato alimenta
+// (ver v2cDias). Sigue escribiendo en cartera_whatsapp: el sync no la toca.
+function v2cManual(ws, wa) {
+  const fecha = wa && wa.ultimo_contacto ? wa.ultimo_contacto : '';
+  const nota = wa && wa.nota ? wa.nota : '';
+  return '<div class="wa"><input type="date" value="' + v2Esc(fecha) + '" onchange="v2CartSaveWa(this,\'' + ws + '\',\'fecha\')" ' +
+    'title="Contacto sin reunion grabada (WhatsApp, llamada, operativo). Manda sobre los dias si es mas reciente que la ultima reunion." ' +
+    'style="font-size:10px;border:1px solid #d3dbe6;border-radius:4px;padding:1px 3px;width:100%">' +
+    '<span class="wa-nota" contenteditable="true" onblur="v2CartSaveWa(this,\'' + ws + '\',\'nota\')">' + v2Esc(nota) + '</span></div>';
 }
 function v2cWa(ws, wa) {
   const fecha = wa && wa.ultimo_contacto ? wa.ultimo_contacto : '';
@@ -421,7 +437,7 @@ function v2RenderCartera() {
     const dc = v2cDias(p, a.wa), dias = dc.d;
     return '<tr>' +
       '<td class="s0">' + (i + 1) + '</td>' +
-      '<td class="s1 l"><span class="v2c-cta">' + v2Esc(p.cliente) + '</span><span class="v2c-am">' + v2Esc(p.am_registro || '') + ' · ' + v2Esc(p.workspace_id) + (p.am_mismatch ? ' · <span style="color:#c0392b">≠ asiste ' + v2Esc(p.am_real || '') + '</span>' : '') + '</span></td>' +
+      '<td class="s1 l"><span class="v2c-cta">' + v2Esc(p.cliente) + '</span><span class="v2c-am">' + v2Esc(p.am_registro || '') + ' · ' + v2Esc(p.workspace_id) + '</span>' + '<button class="qbtn" style="margin-top:4px;font-size:9px" onclick="v2CartArchivar(\'' + p.workspace_id + '\')" title="Manda al Log lo cualitativo vivo de esta cuenta. No toca los bloqueos ni a las otras cuentas.">archivar semana</button>' + '<span class="v2c-am">' + (p.am_mismatch ? ' · <span style="color:#c0392b">≠ asiste ' + v2Esc(p.am_real || '') + '</span>' : '') + '</span></td>' +
       '<td>' + v2Num(rj) + '</td><td class="b">' + v2Num(rp) + ' <span style="font-size:9.5px">' + v2cDelta((rp || 0) - (rj || 0)) + '</span></td>' +
       '<td>' + v2cUSD(vj) + '</td><td class="b">' + v2cUSD(vp) + '</td><td>' + (vp != null && vj != null ? v2cDelta(vp - vj) : '<span class="v2c-na">—</span>') + '</td>' +
       '<td class="vp">' + (vpj ? '$' + vpj.toFixed(2) : '<span class="v2c-na">—</span>') + '</td>' +
@@ -433,6 +449,7 @@ function v2RenderCartera() {
       '<td class="l" style="color:#8a96aa">' + v2Esc(dc.fecha || '—') +
         (dc.fuente === 'wa' ? ' <span title="Contacto manual (WhatsApp/operativo), no reunión grabada en Fathom. Última reunión: ' + v2Esc(p.ultima_reunion_cliente || 'sin registro') + '" style="color:#00b8eb;font-weight:700;cursor:help">wa</span>' : '') + '</td>' +
       '<td><span class="dias ' + v2cSem(dias) + '" ' + (dc.fuente === 'wa' ? 'title="Cuenta desde contacto manual, no desde reunión grabada"' : '') + '>' + (dias == null ? '—' : dias) + '</span></td>' +
+      '<td class="l" style="min-width:130px">' + v2cManual(p.workspace_id, a.wa) + '</td>' +
       '<td class="l" style="font-size:10px">' + (p.proxima_reunion ? '<span style="color:#1b7a2e;font-weight:700">' + v2Esc(p.proxima_reunion) + '</span>' : '<span class="v2c-na">nada agendado</span>') + '</td>' +
       '<td class="pulso">' + v2cPulso(p) + '</td>' +
       '<td class="l v2c-xtra"><div class="qwrap">' + v2cQList(a.reg, 'tema', p.workspace_id) + '</div></td>' +
@@ -440,7 +457,6 @@ function v2RenderCartera() {
       '<td class="l v2c-xtra"><div class="qwrap">' + v2cQList(a.reg, 'cliente', p.workspace_id) + '</div></td>' +
       '<td class="l v2c-xtra">' + v2cBloqs(a.blo, p.workspace_id) + '</td>' +
       '<td class="l v2c-xtra">' + v2cScrap(a.reg, p.workspace_id) + '</td>' +
-      '<td class="l v2c-xtra">' + v2cWa(p.workspace_id, a.wa) + '</td>' +
       '</tr>';
   }).join('');
   v2SetHTML(body, rows);
@@ -572,6 +588,35 @@ async function v2CartAddBloqueo(btn, ws) {
     setTimeout(() => { const el = document.querySelector('.bx[data-id="' + rec.id + '"] .qtext'); if (el) el.focus(); }, 60);
   } catch (err) { alert('Error creando: ' + err.message); console.error(err); }
 }
+// Archivado manual: manda al Log lo cualitativo vivo (draft + confirmado) de una cuenta,
+// o de las 9 si ws viene null. Espejo del archive_cartera_registro.py que corre los viernes
+// 18:05; existe para que el AM no tenga que esperar al viernes cuando ya cerro su semana.
+// NO toca cartera_bloqueos: un bloqueo vive hasta que alguien lo marca resuelto o descartado.
+// Estado 'archivado' y no 'descartado': el prompt de la IA los trata distinto (un descarte
+// veta el tema para siempre; un archivado solo dice "ya se registro").
+async function v2CartArchivar(ws) {
+  const cuenta = ws ? (v2CartAccts.find(a => a.p.workspace_id === ws) || {}).p : null;
+  const alcance = ws ? ('la cuenta ' + ((cuenta && cuenta.cliente) || ws)) : 'las ' + v2CartAccts.length + ' cuentas';
+  const vivos = v2CartAccts
+    .filter(a => !ws || a.p.workspace_id === ws)
+    .reduce((n, a) => n + a.reg.filter(r => r.estado === 'draft' || r.estado === 'confirmado').length, 0);
+  if (!vivos) { alert('No hay nada vivo para archivar en ' + alcance + '.'); return; }
+  if (!confirm('Archivar ' + vivos + ' item(s) de ' + alcance + '?\n\n' +
+               'Pasan al Log agrupados por cliente. No se borra nada y los bloqueos no se tocan.')) return;
+  try {
+    let q = sb.from('cartera_registro')
+      .update({ estado: 'archivado', updated_by: 'AM (archivado manual)', updated_at: new Date().toISOString() })
+      .in('estado', ['draft', 'confirmado']);
+    if (ws) q = q.eq('workspace_id', ws);
+    const { error } = await q;
+    if (error) throw error;
+    // se recarga desde la base en vez de parchear el cache: son muchas filas y en varias
+    // cuentas a la vez, y un cache desincronizado ya causo el bug de edicion del 29-jul.
+    v2Loaded.cartera = false; v2Loaded.log = false;
+    await v2LoadCartera();
+  } catch (err) { alert('Error archivando: ' + err.message); console.error(err); }
+}
+
 async function v2CartSaveWa(el, ws, which) {
   const payload = { workspace_id: ws, updated_by: 'AM', updated_at: new Date().toISOString() };
   if (which === 'fecha') payload.ultimo_contacto = el.value || null;
@@ -1315,7 +1360,7 @@ async function v2LoadLog() {
   const body = document.getElementById('v2LogBody');
   try {
     const [reg, blo, acc, roll, nombres, exp] = await Promise.all([
-      sb.from('cartera_registro').select('*').eq('estado', 'descartado'),
+      sb.from('cartera_registro').select('*').in('estado', ['descartado', 'archivado']),
       sb.from('cartera_bloqueos').select('*').in('estado', ['descartado', 'resuelto']),
       sb.from('expansion_acciones').select('*').or('estado.eq.resuelto,estado_draft.eq.descartado'),
       sb.from('rollouts').select('id,cliente,workspace_id,am_owner,pais,bloqueo_actual,updated_at').eq('archived', true),
@@ -1332,7 +1377,8 @@ async function v2LoadLog() {
     const filas = [];
     if (reg.error) console.warn('[v2 log] registro:', reg.error.message);
     (reg.data || []).forEach(r => filas.push({
-      ts: r.updated_at || r.created_at, nacio: r.created_at, cierre: 'descartado', fuente: 'Cartera 2500',
+      ts: r.updated_at || r.created_at, nacio: r.created_at,
+      cierre: r.estado === 'archivado' ? 'archivado' : 'descartado', fuente: 'Cartera 2500',
       ws: r.workspace_id, cuenta: nombreDe(r.workspace_id), tipo: r.tipo || 'tema',
       texto: r.texto || '', extra: '', why: r.why || '', quien: r.updated_by || '',
     }));

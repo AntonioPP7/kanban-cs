@@ -589,8 +589,12 @@ async function v2CartAddBloqueo(btn, ws) {
   } catch (err) { alert('Error creando: ' + err.message); console.error(err); }
 }
 // Archivado manual: manda al Log lo cualitativo vivo (draft + confirmado) de una cuenta,
-// o de las 9 si ws viene null. Espejo del archive_cartera_registro.py que corre los viernes
-// 18:05; existe para que el AM no tenga que esperar al viernes cuando ya cerro su semana.
+// o de las 9 si ws viene null. Espejo del archive_cartera_registro.py que corre los lunes
+// 7:56, dos minutos antes de que la IA reponga. Existe para que el AM no tenga que esperar
+// al lunes cuando ya cerro su semana.
+// OJO: a diferencia del script, este boton NO aplica el piso de 3 dias de antiguedad: si el
+// AM lo pulsa, se archiva todo lo vivo de esa cuenta. Es deliberado -- es una accion
+// explicita suya, no un barrido automatico.
 // NO toca cartera_bloqueos: un bloqueo vive hasta que alguien lo marca resuelto o descartado.
 // Estado 'archivado' y no 'descartado': el prompt de la IA los trata distinto (un descarte
 // veta el tema para siempre; un archivado solo dice "ya se registro").

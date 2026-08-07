@@ -1357,19 +1357,23 @@ function v2RenderManualidad() {
 const V2LOG_CIERRE_LBL = { resuelto: 'Resuelto', descartado: 'Descartado', archivado: 'Archivado' };
 const V2LOG_TIPO_LBL = {
   tema: 'tema', hicimos: 'hicimos', cliente: 'cliente', scrapping: 'scrapping',
-  bloqueo: 'bloqueo', accion: 'accion', cuenta: 'cuenta',
+  bloqueo: 'bloqueo', accion: 'accion', cuenta: 'cuenta', diagnostico: 'diagnóstico',
 };
 
 async function v2LoadLog() {
   const body = document.getElementById('v2LogBody');
   try {
-    const [reg, blo, acc, roll, nombres, exp] = await Promise.all([
+    const [reg, blo, acc, roll, nombres, exp, histExp] = await Promise.all([
       sb.from('cartera_registro').select('*').in('estado', ['descartado', 'archivado']),
       sb.from('cartera_bloqueos').select('*').in('estado', ['descartado', 'resuelto']),
       sb.from('expansion_acciones').select('*').or('estado.eq.resuelto,estado_draft.eq.descartado'),
       sb.from('rollouts').select('id,cliente,workspace_id,am_owner,pais,bloqueo_actual,updated_at').eq('archived', true),
       sb.from('cartera_2500').select('workspace_id,cliente'),
       sb.from('expansion_top40').select('workspace_id,workspace_name').order('snapshot_date', { ascending: false }).limit(400),
+      // Historial semanal de Retención/Expansión (migration_21). Tabla aparte y no un
+      // estado 'archivado' como en Rollouts: los 3 cupos llevan UNIQUE(workspace_id,seq),
+      // así que una fila archivada dejaría el cupo tomado para siempre.
+      sb.from('expansion_historial').select('*'),
     ]);
 
     // Mapa workspace_id -> nombre: las tablas de cartera solo guardan el ws_id.
@@ -1400,6 +1404,17 @@ async function v2LoadLog() {
       fuente: 'Retención / Expansión', ws: a.workspace_id, cuenta: nombreDe(a.workspace_id),
       tipo: a.tipo === 'bloqueo' ? 'bloqueo' : 'accion',
       texto: a.texto || '', extra: '', why: '', quien: a.responsable || a.updated_by || '',
+    }));
+    if (histExp.error) console.warn('[v2 log] historial expansión:', histExp.error.message);
+    // Lo que el archivado de los lunes saca del tablero. El cierre se lee del estado con
+    // el que la semana lo dejó: descartado > resuelto > archivado (simplemente venció).
+    (histExp.data || []).forEach(h => filas.push({
+      ts: h.archivado_at || h.actualizado_en, nacio: h.creado_en,
+      cierre: h.estado_draft === 'descartado' ? 'descartado'
+        : (h.estado === 'resuelto' ? 'resuelto' : 'archivado'),
+      fuente: 'Retención / Expansión', ws: h.workspace_id, cuenta: nombreDe(h.workspace_id),
+      tipo: h.tipo || 'accion',
+      texto: h.texto || '', extra: '', why: '', quien: h.responsable || h.updated_by || '',
     }));
     if (roll.error) console.warn('[v2 log] rollouts:', roll.error.message);
     (roll.data || []).forEach(r => filas.push({

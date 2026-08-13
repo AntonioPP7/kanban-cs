@@ -55,6 +55,45 @@ function v2ShowTab(tab) {
 }
 
 // ============================================================
+// OBJETIVO DE NEGOCIO del cliente con Picker (workspace_objetivos)
+// Tabla compartida por Cartera 2500 y Retencion/Expansion, keyed por
+// workspace_id. Vive aparte de los snapshots para que ningun sync la pise.
+// ============================================================
+
+let v2Objetivos = {};        // workspace_id -> fila de workspace_objetivos
+let v2ObjCargado = false;
+
+async function v2LoadObjetivos() {
+  if (v2ObjCargado) return;
+  try {
+    const { data, error } = await sb.from('workspace_objetivos').select('*');
+    if (error) throw error;
+    (data || []).forEach(o => { v2Objetivos[o.workspace_id] = o; });
+    v2ObjCargado = true;
+  } catch (err) {
+    // Tabla sin migrar todavia o error puntual: la pestana vive igual, el campo queda vacio.
+    console.warn('[v2 objetivos]', err.message);
+  }
+}
+
+async function v2ObjSave(ws, el) {
+  const valor = el.textContent.trim();
+  const prev = v2Objetivos[ws] || {};
+  if ((prev.objetivo || '') === valor) return;   // sin cambio real, no escribimos
+  const row = { workspace_id: ws, objetivo: valor || null, updated_by: 'AM', updated_at: new Date().toISOString() };
+  try {
+    const { data, error } = await sb.from('workspace_objetivos')
+      .upsert(row, { onConflict: 'workspace_id' }).select();
+    if (error) throw error;
+    v2Objetivos[ws] = data && data[0] ? data[0] : row;
+    el.classList.toggle('empty', !valor);
+    // flash de guardado: cada vista tiene su clase scoped, agregamos las dos
+    el.classList.add('v2c-saved', 'v2e-saved');
+    setTimeout(() => el.classList.remove('v2c-saved', 'v2e-saved'), 900);
+  } catch (err) { alert('Error guardando el objetivo: ' + err.message); console.error(err); }
+}
+
+// ============================================================
 // DAILY RETENTION — selector de cuenta + descargas
 // ============================================================
 
@@ -274,6 +313,7 @@ async function v2LoadCartera() {
       sb.from('cartera_whatsapp').select('*'),
     ]);
     for (const r of [pulso, rides, reg, blo, wa]) if (r.error) throw r.error;
+    await v2LoadObjetivos();   // tolerante: si falla, la pestana vive igual
 
     const ridesBy = {}; (rides.data || []).forEach(r => ridesBy[r.workspace_id] = r);
     const waBy = {}; (wa.data || []).forEach(r => waBy[r.workspace_id] = r);
@@ -437,7 +477,8 @@ function v2RenderCartera() {
     const dc = v2cDias(p, a.wa), dias = dc.d;
     return '<tr>' +
       '<td class="s0">' + (i + 1) + '</td>' +
-      '<td class="s1 l"><span class="v2c-cta">' + v2Esc(p.cliente) + '</span><span class="v2c-am">' + v2Esc(p.am_registro || '') + ' · ' + v2Esc(p.workspace_id) + '</span>' + '<button class="qbtn" style="margin-top:4px;font-size:9px" onclick="v2CartArchivar(\'' + p.workspace_id + '\')" title="Manda al Log lo cualitativo vivo de esta cuenta. No toca los bloqueos ni a las otras cuentas.">archivar semana</button>' + '<span class="v2c-am">' + (p.am_mismatch ? ' · <span style="color:#c0392b">≠ asiste ' + v2Esc(p.am_real || '') + '</span>' : '') + '</span></td>' +
+      '<td class="s1 l"><span class="v2c-cta">' + v2Esc(p.cliente) + '</span><span class="v2c-am">' + v2Esc(p.am_registro || '') + ' · ' + v2Esc(p.workspace_id) + '</span>' + '<button class="qbtn" style="margin-top:4px;font-size:9px" onclick="v2CartArchivar(\'' + p.workspace_id + '\')" title="Manda al Log lo cualitativo vivo de esta cuenta. No toca los bloqueos ni a las otras cuentas.">archivar semana</button>' + '<span class="v2c-am">' + (p.am_mismatch ? ' · <span style="color:#c0392b">≠ asiste ' + v2Esc(p.am_real || '') + '</span>' : '') + '</span>' +
+      '<div class="v2obj"><span class="v2obj-lbl" title="Qué quiere lograr el cliente con Picker. Compartido con la pestaña Retención/Expansión.">Objetivo</span><span class="v2obj-txt' + ((v2Objetivos[p.workspace_id] || {}).objetivo ? '' : ' empty') + '" data-ph="Objetivo de negocio con Picker…" contenteditable="true" onblur="v2ObjSave(\'' + p.workspace_id + '\',this)">' + v2Esc((v2Objetivos[p.workspace_id] || {}).objetivo || '') + '</span></div></td>' +
       '<td>' + v2Num(rj) + '</td><td class="b">' + v2Num(rp) + ' <span style="font-size:9.5px">' + v2cDelta((rp || 0) - (rj || 0)) + '</span></td>' +
       '<td>' + v2cUSD(vj) + '</td><td class="b">' + v2cUSD(vp) + '</td><td>' + (vp != null && vj != null ? v2cDelta(vp - vj) : '<span class="v2c-na">—</span>') + '</td>' +
       '<td class="vp">' + (vpj ? '$' + vpj.toFixed(2) : '<span class="v2c-na">—</span>') + '</td>' +
@@ -663,6 +704,7 @@ async function v2LoadExpansion() {
     else (notas.data || []).forEach(n => { v2ExpNotas[n.workspace_id] = n; });
     if (acciones.error) console.warn('[v2 expansion] acciones:', acciones.error.message);
     else (acciones.data || []).forEach(a => { (v2ExpAcciones[a.workspace_id] = v2ExpAcciones[a.workspace_id] || []).push(a); });
+    await v2LoadObjetivos();   // tolerante: si falla, la pestana vive igual
     v2Loaded.expansion = true;
     const corte = v2Expansion[0] && v2Expansion[0].corte_date ? ' · corte ' + v2Expansion[0].corte_date : '';
     document.getElementById('v2ExpansionSnapshotDate').textContent =
@@ -913,6 +955,10 @@ function v2ExpPlanCell(ws, fresh) {
 function v2ExpDetailRow(r, n, open) {
   const ws = r.workspace_id;
   n = n || {};
+  const oRow = v2Objetivos[ws] || {};
+  const objetivo = '<span class="etext' + (oRow.objetivo ? '' : ' empty') + '" data-ph="Qué quiere lograr el cliente con Picker…"' +
+    ' contenteditable="true" onblur="v2ObjSave(\'' + ws + '\',this)"' +
+    ' onclick="event.stopPropagation()">' + v2Esc(oRow.objetivo || '') + '</span>';
   const diag = '<span class="etext' + (n.diagnostico ? '' : ' empty') + '" data-ph="Por qué sube o cae…"' +
     ' contenteditable="true" onblur="v2ExpSave(\'' + ws + '\',\'diagnostico\',this)"' +
     ' onclick="event.stopPropagation()">' + v2Esc(n.diagnostico || '') + '</span>';
@@ -941,6 +987,8 @@ function v2ExpDetailRow(r, n, open) {
 
   return '<tr class="v2e-detail' + (open ? ' open' : '') + '" data-ws="' + ws + '"><td colspan="15">' +
     '<div class="v2e-grid">' +
+      '<div class="v2e-lbl">Objetivo</div><div>' + objetivo +
+        '<div class="v2e-meta"><span>objetivo de negocio del cliente con Picker · compartido con la pestaña Cartera 2500</span></div></div>' +
       '<div class="v2e-lbl">Diagnóstico</div><div>' + diag +
         '<div class="v2e-meta"><span>' + meta + '</span>' + dBtns + '</div></div>' +
       '<div class="v2e-lbl">Plan</div><div class="v2e-items">' + filas + add + '</div>' +
@@ -1527,3 +1575,11 @@ function v2RenderLog() {
   }).join('');
   v2SetHTML(body, html);
 }
+
+// ============================================================
+// Arranque: Ciclo CS quedo oculto (12-ago-2026), la pestana por
+// defecto pasa a Cartera 2500. El script carga con defer, asi que
+// el DOM ya existe cuando corre esta linea; el v2ShowTab dispara
+// la carga lazy de datos de la pestana.
+// ============================================================
+v2ShowTab('cartera');

@@ -394,8 +394,9 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
 
 <!-- V2 Tabs -->
 <div class="v2-tabs">
-  <div class="v2-tab active" data-v2-tab="ciclo" onclick="v2ShowTab('ciclo')">Ciclo CS</div>
-  <div class="v2-tab" data-v2-tab="cartera" onclick="v2ShowTab('cartera')">Cartera 2500</div>
+  <!-- Ciclo CS oculto (12-ago-2026, pedido de Antonio). Para reactivar: quitar display:none -->
+  <div class="v2-tab" data-v2-tab="ciclo" onclick="v2ShowTab('ciclo')" style="display:none">Ciclo CS</div>
+  <div class="v2-tab active" data-v2-tab="cartera" onclick="v2ShowTab('cartera')">Cartera 2500</div>
   <div class="v2-tab" data-v2-tab="expansion" onclick="v2ShowTab('expansion')">Retención / Expansión <span class="v2-badge">Portafolio</span></div>
   <div class="v2-tab" data-v2-tab="manualidad" onclick="v2ShowTab('manualidad')">Manualidad</div>
   <div class="v2-tab" data-v2-tab="retention" onclick="v2ShowTab('retention')">Retention <span class="v2-badge" id="v2BadgeRetention">—</span></div>
@@ -403,7 +404,7 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
 </div>
 
 <!-- V2 View: Ciclo (wraps current kanban) -->
-<div id="view-ciclo" class="v2-view v2-active">
+<div id="view-ciclo" class="v2-view">
 
 <!-- Header -->
 <div class="header">
@@ -582,7 +583,7 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
 </div><!-- /view-ciclo -->
 
 <!-- V2 View: Cartera 2500 (v2 — editable) -->
-<div id="view-cartera" class="v2-view">
+<div id="view-cartera" class="v2-view v2-active">
   <style>
   #view-cartera .v2c-ctrl{display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap}
   #view-cartera .v2c-seg{display:flex;border:1px solid var(--grid,#d3dbe6);border-radius:6px;overflow:hidden;background:#fff}
@@ -609,6 +610,12 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
   #view-cartera table.v2c tbody tr:hover{background:#f7fbfe}
   #view-cartera .v2c-cta{font-weight:700;font-size:12.5px;display:block;line-height:1.2}
   #view-cartera .v2c-am{font-size:9.5px;color:#8a96aa;font-weight:600}
+  /* objetivo de negocio del cliente (tabla workspace_objetivos, compartida con Retencion/Expansion) */
+  #view-cartera .v2obj{margin-top:4px;display:flex;gap:5px;align-items:baseline}
+  #view-cartera .v2obj-lbl{font-size:8.5px;font-weight:800;color:#8a96aa;text-transform:uppercase;letter-spacing:.3px;flex:none}
+  #view-cartera .v2obj-txt{outline:none;font-size:10.5px;font-weight:500;color:#314374;line-height:1.35;border-bottom:1px dashed #c7d0dd;padding:1px 3px;min-height:14px;min-width:90px;max-width:220px;display:inline-block}
+  #view-cartera .v2obj-txt:focus{background:#fffef8;box-shadow:0 0 0 2px #00b8eb55;border-radius:3px;border-bottom-color:transparent}
+  #view-cartera .v2obj-txt.empty:before{content:attr(data-ph);color:#aab4c4;font-style:italic}
   #view-cartera .pos{color:#1b7a2e;font-weight:700}#view-cartera .negv{color:#c0392b;font-weight:700}#view-cartera .zero{color:#a8b3c4}
   #view-cartera .v2c-na{color:#c2cbd8}
   #view-cartera td.vp{background:#f0fafe}#view-cartera td.tch{background:#f4fafd}#view-cartera td.gan{background:#eaf6fb}

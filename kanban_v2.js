@@ -477,8 +477,7 @@ function v2RenderCartera() {
     const dc = v2cDias(p, a.wa), dias = dc.d;
     return '<tr>' +
       '<td class="s0">' + (i + 1) + '</td>' +
-      '<td class="s1 l"><span class="v2c-cta">' + v2Esc(p.cliente) + '</span><span class="v2c-am">' + v2Esc(p.am_registro || '') + ' · ' + v2Esc(p.workspace_id) + '</span>' + '<button class="qbtn" style="margin-top:4px;font-size:9px" onclick="v2CartArchivar(\'' + p.workspace_id + '\')" title="Manda al Log lo cualitativo vivo de esta cuenta. No toca los bloqueos ni a las otras cuentas.">archivar semana</button>' + '<span class="v2c-am">' + (p.am_mismatch ? ' · <span style="color:#c0392b">≠ asiste ' + v2Esc(p.am_real || '') + '</span>' : '') + '</span>' +
-      '<div class="v2obj"><span class="v2obj-lbl" title="Qué quiere lograr el cliente con Picker. Compartido con la pestaña Retención/Expansión.">Objetivo</span><span class="v2obj-txt' + ((v2Objetivos[p.workspace_id] || {}).objetivo ? '' : ' empty') + '" data-ph="Objetivo de negocio con Picker…" contenteditable="true" onblur="v2ObjSave(\'' + p.workspace_id + '\',this)">' + v2Esc((v2Objetivos[p.workspace_id] || {}).objetivo || '') + '</span></div></td>' +
+      '<td class="s1 l"><span class="v2c-cta">' + v2Esc(p.cliente) + '</span><span class="v2c-am">' + v2Esc(p.am_registro || '') + ' · ' + v2Esc(p.workspace_id) + '</span>' + '<button class="qbtn" style="margin-top:4px;font-size:9px" onclick="v2CartArchivar(\'' + p.workspace_id + '\')" title="Manda al Log lo cualitativo vivo de esta cuenta. No toca los bloqueos ni a las otras cuentas.">archivar semana</button>' + '<span class="v2c-am">' + (p.am_mismatch ? ' · <span style="color:#c0392b">≠ asiste ' + v2Esc(p.am_real || '') + '</span>' : '') + '</span></td>' +
       '<td>' + v2Num(rj) + '</td><td class="b">' + v2Num(rp) + ' <span style="font-size:9.5px">' + v2cDelta((rp || 0) - (rj || 0)) + '</span></td>' +
       '<td>' + v2cUSD(vj) + '</td><td class="b">' + v2cUSD(vp) + '</td><td>' + (vp != null && vj != null ? v2cDelta(vp - vj) : '<span class="v2c-na">—</span>') + '</td>' +
       '<td class="vp">' + (vpj ? '$' + vpj.toFixed(2) : '<span class="v2c-na">—</span>') + '</td>' +
@@ -490,9 +489,9 @@ function v2RenderCartera() {
       '<td class="l" style="color:#8a96aa">' + v2Esc(dc.fecha || '—') +
         (dc.fuente === 'wa' ? ' <span title="Contacto manual (WhatsApp/operativo), no reunión grabada en Fathom. Última reunión: ' + v2Esc(p.ultima_reunion_cliente || 'sin registro') + '" style="color:#00b8eb;font-weight:700;cursor:help">wa</span>' : '') + '</td>' +
       '<td><span class="dias ' + v2cSem(dias) + '" ' + (dc.fuente === 'wa' ? 'title="Cuenta desde contacto manual, no desde reunión grabada"' : '') + '>' + (dias == null ? '—' : dias) + '</span></td>' +
-      '<td class="l" style="min-width:130px">' + v2cManual(p.workspace_id, a.wa) + '</td>' +
       '<td class="l" style="font-size:10px">' + (p.proxima_reunion ? '<span style="color:#1b7a2e;font-weight:700">' + v2Esc(p.proxima_reunion) + '</span>' : '<span class="v2c-na">nada agendado</span>') + '</td>' +
       '<td class="pulso">' + v2cPulso(p) + '</td>' +
+      '<td class="l v2c-xtra"><span class="v2obj-txt' + ((v2Objetivos[p.workspace_id] || {}).objetivo ? '' : ' empty') + '" data-ph="Objetivo de negocio con Picker…" contenteditable="true" onblur="v2ObjSave(\'' + p.workspace_id + '\',this)">' + v2Esc((v2Objetivos[p.workspace_id] || {}).objetivo || '') + '</span></td>' +
       '<td class="l v2c-xtra"><div class="qwrap">' + v2cQList(a.reg, 'tema', p.workspace_id) + '</div></td>' +
       '<td class="l v2c-xtra"><div class="qwrap">' + v2cQList(a.reg, 'hicimos', p.workspace_id) + '</div></td>' +
       '<td class="l v2c-xtra"><div class="qwrap">' + v2cQList(a.reg, 'cliente', p.workspace_id) + '</div></td>' +

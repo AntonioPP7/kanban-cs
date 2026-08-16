@@ -236,6 +236,64 @@ function v2TendPill(d) {
 }
 
 // ============================================================
+// Retencion/Expansion — crecimiento normalizado (migration_23, 14-ago-2026)
+// ============================================================
+// Que cambio en el backend y por que el front lo tiene que mostrar distinto:
+//   * delta / delta_pct ya NO restan totales de meses de distinta longitud. El mes
+//     anterior se reescala a la longitud del mes en curso (mes_ant_eq) antes de
+//     restar. Antes, jun->jul regalaba +3.3% a todas las cuentas por igual y
+//     feb->mar +10.7%. Eso no era crecimiento, era el calendario.
+//   * direccion puede ser 'indefinido': las proyecciones a ritmo 28d y a ritmo 7d
+//     caen a lados opuestos del baseline. Pasa en 12-14% de los casos a mitad de
+//     mes. Mostrarlo como flecha firme era inventar una certeza que no hay.
+//   * confianza rotula que tan creible es la direccion segun el dia del corte
+//     (71% de acierto en la primera decena, 94% pasado el 24 — backtest de 3 meses
+//     en automations/kanban-cs-sync/backtest_expansion_growth.py).
+// Todo con fallback: los snapshots anteriores al 14-ago no traen estas columnas.
+
+function v2ExpDir(r) {
+  if (r.direccion) return r.direccion;
+  if (r.delta == null || Number(r.delta) === 0) return 'indefinido';
+  return Number(r.delta) > 0 ? 'sube' : 'baja';
+}
+
+function v2DirPill(dir) {
+  if (dir === 'sube') return '<span class="v2-pill v2-pill-verde">&#9650; Sube</span>';
+  if (dir === 'baja') return '<span class="v2-pill v2-pill-rojo">&#9660; Baja</span>';
+  return '<span class="v2-pill v2-pill-gris v2-tooltip" data-tooltip="Las dos proyecciones (ritmo 28 dias y ritmo 7 dias) caen a lados opuestos del mes anterior. Con los datos de este corte no se puede afirmar si la cuenta sube o baja.">? Sin definir</span>';
+}
+
+// Banda de la proyeccion, para el tooltip de la celda de crecimiento.
+function v2BandaTip(lo, hi, pre) {
+  if (lo == null || hi == null) return '';
+  const f = v => (v >= 0 ? '+' : '\u2212') + (pre || '') + Math.abs(Math.round(v)).toLocaleString('en-US');
+  return 'Banda de proyeccion: ' + f(lo) + ' a ' + f(hi) + ' (ritmo 28d vs ritmo 7d). ';
+}
+
+// '2026-08-09' -> '9 ago'. Nunca 'MM-DD': en espanol 08-09 se lee 8 de septiembre.
+const V2_MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+function v2FechaCorta(iso) {
+  if (!iso) return '';
+  const p = String(iso).slice(0, 10).split('-');
+  if (p.length !== 3) return String(iso);
+  return Number(p[2]) + ' ' + (V2_MESES[Number(p[1]) - 1] || p[1]);
+}
+
+function v2Money(v) {
+  if (v == null || v === '') return '—';
+  const n = Number(v);
+  return '$' + Math.round(Math.abs(n)).toLocaleString('en-US');
+}
+
+function v2MoneyDelta(v) {
+  if (v == null) return { txt: '—', cls: '' };
+  const n = Number(v);
+  if (n > 0) return { txt: '+$' + Math.round(n).toLocaleString('en-US'), cls: 'style="color:var(--verde-500);font-weight:700"' };
+  if (n < 0) return { txt: '\u2212$' + Math.round(Math.abs(n)).toLocaleString('en-US'), cls: 'style="color:var(--rojo);font-weight:700"' };
+  return { txt: '$0', cls: 'style="color:var(--neutral-800)"' };
+}
+
+// ============================================================
 // CARTERA 2500
 // ============================================================
 // v2 Cartera 2500 editable — une 5 tablas (cartera_2500 rides + cartera_pulso revenue/contacto
@@ -684,7 +742,7 @@ async function v2LoadExpansion() {
       .select('snapshot_date').order('snapshot_date', { ascending: false }).limit(1);
     if (e1) throw e1;
     if (!latest || !latest.length) {
-      v2SetHTML(body, '<tr><td colspan="15" class="v2-empty">Sin snapshot aun. El sync <code>expansion_top40</code> corre diario 7:48 AM.</td></tr>');
+      v2SetHTML(body, '<tr><td colspan="17" class="v2-empty">Sin snapshot aun. El sync <code>expansion_top40</code> corre diario 7:48 AM.</td></tr>');
       document.getElementById('v2ExpansionSnapshotDate').textContent = 'Snapshot: sin datos';
       v2Loaded.expansion = true; return;
     }
@@ -712,7 +770,7 @@ async function v2LoadExpansion() {
     v2RenderExpansion();
     v2ExpLive();
   } catch (err) {
-    v2SetHTML(body, '<tr><td colspan="15" class="v2-empty">Error: ' + v2Esc(err.message) + '</td></tr>');
+    v2SetHTML(body, '<tr><td colspan="17" class="v2-empty">Error: ' + v2Esc(err.message) + '</td></tr>');
     console.error('[v2 expansion]', err);
   }
 }
@@ -836,7 +894,7 @@ const V2E_ESTADOS = { andando: 'Andando', bloqueado: 'Bloqueado', resuelto: 'Res
 
 function v2RenderExpansion() {
   const body = document.getElementById('v2ExpansionBody');
-  if (!v2Expansion.length) { v2SetHTML(body, '<tr><td colspan="15" class="v2-empty">Sin cuentas.</td></tr>'); return; }
+  if (!v2Expansion.length) { v2SetHTML(body, '<tr><td colspan="17" class="v2-empty">Sin cuentas.</td></tr>'); return; }
 
   const fAM = (document.getElementById('v2FilterExpAM') || {}).value || '';
   const fSem = (document.getElementById('v2FilterExpSem') || {}).value || '';
@@ -857,12 +915,20 @@ function v2RenderExpansion() {
   });
 
   const totMayo = rows.reduce((a, r) => a + (r.mes_ant || 0), 0);
+  // mes_ant_eq = mes anterior reescalado a la longitud del mes en curso. El neto se
+  // mide contra ESO, no contra el total crudo, o el calendario se cuela como
+  // crecimiento. Fallback al crudo para snapshots viejos.
+  const totMayoEq = rows.reduce((a, r) => a + (r.mes_ant_eq != null ? Number(r.mes_ant_eq) : (r.mes_ant || 0)), 0);
   const totProy = rows.reduce((a, r) => a + (r.proy_lenta || 0), 0);
   const totProy7 = rows.reduce((a, r) => a + (r.proy_rapida || 0), 0);
-  const neto = totProy - totMayo;
+  const neto = totProy - totMayoEq;
   const var7 = totProy7 - totProy;
-  const nUp = rows.filter(r => (r.delta || 0) > 0).length;
-  const nDown = rows.filter(r => (r.delta || 0) < 0).length;
+  const nUp = rows.filter(r => v2ExpDir(r) === 'sube').length;
+  const nDown = rows.filter(r => v2ExpDir(r) === 'baja').length;
+  const nInd = rows.filter(r => v2ExpDir(r) === 'indefinido').length;
+  const revAntEq = rows.reduce((a, r) => a + (r.rev_ant_eq != null ? Number(r.rev_ant_eq) : 0), 0);
+  const revProy = rows.reduce((a, r) => a + (r.rev_proy_lenta != null ? Number(r.rev_proy_lenta) : 0), 0);
+  const revNeto = revAntEq ? (revProy - revAntEq) : null;
   const totAlertas = rows.reduce((a, r) => a + (r.alertas_criticas || 0), 0);
   const nConAlertas = rows.filter(r => (r.alertas_criticas || 0) > 0).length;
   const scope = fAM === '__none__' ? 'cuentas sin AM' : (fAM ? 'cartera ' + fAM : 'retención / expansión');
@@ -874,10 +940,35 @@ function v2RenderExpansion() {
   const netoEl = document.getElementById('v2ExpNeto');
   netoEl.textContent = (neto >= 0 ? '+' : '−') + Math.abs(neto).toLocaleString('en-US');
   netoEl.style.color = neto >= 0 ? 'var(--verde-500)' : 'var(--rojo)';
-  const pctNeto = totMayo ? (neto / totMayo * 100) : 0;
-  document.getElementById('v2ExpNetoSub').textContent = (pctNeto >= 0 ? '+' : '−') + Math.abs(pctNeto).toFixed(1) + '% vs mes ant';
+  const pctNeto = totMayoEq ? (neto / totMayoEq * 100) : 0;
+  document.getElementById('v2ExpNetoSub').textContent =
+    (pctNeto >= 0 ? '+' : '−') + Math.abs(pctNeto).toFixed(1) + '% vs mes ant'
+    + (revNeto != null ? ' · ' + (revNeto >= 0 ? '+' : '−') + '$' + Math.round(Math.abs(revNeto)).toLocaleString('en-US') : '');
   document.getElementById('v2ExpSplit').textContent = nUp + ' / ' + nDown;
-  document.getElementById('v2ExpSplitSub').textContent = 'de ' + rows.length + ' cuentas';
+  document.getElementById('v2ExpSplitSub').textContent =
+    (nInd ? nInd + ' sin definir · ' : '') + 'de ' + rows.length + ' cuentas';
+
+  // Rotulo de corte y confianza. El dia 7 y el dia 26 no valen lo mismo y hasta ahora
+  // el tablero los mostraba igual.
+  const cEl = document.getElementById('v2ExpCorte');
+  if (cEl) {
+    const r0 = rows.find(r => r.confianza) || rows[0] || {};
+    let t = '';
+    if (r0.dia_mes && r0.dias_mes) {
+      t += 'Corte día ' + r0.dia_mes + ' de ' + r0.dias_mes;
+      if (r0.confianza) {
+        t += ' · confianza de la dirección: <b>' + v2Esc(r0.confianza) + '</b>'
+           + (r0.confianza_pct ? ' (' + r0.confianza_pct + '% de acierto histórico)' : '');
+      }
+      t += ' · los % comparan promedios diarios, no totales de mes.';
+    }
+    if (r0.corte_revenue) {
+      t += ' Columnas $ al ' + v2FechaCorta(r0.corte_revenue)
+         + (r0.rev_confianza ? ' (confianza ' + v2Esc(r0.rev_confianza) + ')' : '')
+         + ': facturación va unos días detrás de los rides.';
+    }
+    v2SetHTML(cEl, t || '&nbsp;');
+  }
   document.getElementById('v2ExpAlertas').textContent = totAlertas.toLocaleString('en-US');
   document.getElementById('v2ExpAlertasSub').textContent = nConAlertas + ' de ' + rows.length + ' cuentas afectadas';
   const nConf = rows.filter(r => v2ExpTienePlan(r.workspace_id) && !v2ExpEsDraft(r.workspace_id)).length;
@@ -887,13 +978,26 @@ function v2RenderExpansion() {
   document.getElementById('v2ExpPlanSub').textContent =
     nDraft + ' draft IA por revisar · ' + nBloq + ' bloqueo' + (nBloq === 1 ? '' : 's') + ' abierto' + (nBloq === 1 ? '' : 's');
 
-  if (!rows.length) { v2SetHTML(body, '<tr><td colspan="15" class="v2-empty">Sin cuentas con ese filtro.</td></tr>'); return; }
+  if (!rows.length) { v2SetHTML(body, '<tr><td colspan="17" class="v2-empty">Sin cuentas con ese filtro.</td></tr>'); return; }
 
   const html = rows.map(r => {
     const ws = r.workspace_id;
-    const neg = (r.delta || 0) < 0;
+    const dir = v2ExpDir(r);
+    const neg = dir === 'baja';
     const d = v2DeltaCell(r.delta);
-    const pct = r.delta_pct == null ? '&mdash;' : '<span ' + d.cls + '>' + (r.delta_pct >= 0 ? '+' : '−') + Math.abs(Math.round(r.delta_pct * 100)) + '%</span>';
+    // Sin definir = la banda cruza cero: se muestra el numero en gris, no en rojo/verde,
+    // para que no se lea como una direccion confirmada.
+    if (dir === 'indefinido') d.cls = 'style="color:var(--neutral-800);font-weight:700"';
+    const pct = r.delta_pct == null
+      ? '<span class="v2-tooltip" style="color:var(--neutral-800)" data-tooltip="Muestra insuficiente: el mes anterior no llegó al mínimo de rides para publicar un porcentaje. El absoluto sí es válido.">&mdash;</span>'
+      : '<span ' + d.cls + '>' + (r.delta_pct >= 0 ? '+' : '−') + Math.abs(Math.round(r.delta_pct * 100)) + '%</span>';
+    const bandaTip = v2BandaTip(r.delta_lo, r.delta_hi, '');
+    const rd = v2MoneyDelta(r.rev_delta);
+    if (r.rev_direccion === 'indefinido') rd.cls = 'style="color:var(--neutral-800);font-weight:700"';
+    const revTip = v2BandaTip(r.rev_delta_lo, r.rev_delta_hi, '$')
+      + (r.usd_ride_ant ? '$/ride ' + Number(r.usd_ride_ant).toFixed(2)
+          + (r.usd_ride_proy ? ' → ' + Number(r.usd_ride_proy).toFixed(2) : '') + '. ' : '')
+      + 'Fuente cfo.base_maestra_mat (revenue_usd), corte propio.';
     const region = r.region ? ' <small>' + v2Esc(r.region) + '</small>' : '';
     const am = r.am_owner
       ? v2Esc(r.am_owner)
@@ -924,9 +1028,11 @@ function v2RenderExpansion() {
       '<td class="num">' + v2Num(r.mes_ant) + '</td>' +
       '<td class="num">' + v2Num(r.mtd) + '</td>' +
       '<td class="num">' + v2ProyCell(r.proy_lenta, r.proy_rapida) + '</td>' +
-      '<td class="num" ' + d.cls + '>' + d.txt + '</td>' +
+      '<td class="num v2-tooltip" ' + d.cls + ' data-tooltip="' + v2Esc(bandaTip + 'Contra el mes anterior reescalado a la longitud de este mes.') + '">' + d.txt + '</td>' +
       '<td class="num">' + pct + '</td>' +
-      '<td>' + v2TendPill(r.delta) + '</td>' +
+      '<td class="num">' + v2Money(r.rev_ant) + '</td>' +
+      '<td class="num v2-tooltip" ' + rd.cls + ' data-tooltip="' + v2Esc(revTip) + '">' + rd.txt + '</td>' +
+      '<td>' + v2DirPill(dir) + '</td>' +
       '<td>' + reunion + '</td>' +
       '<td>' + plan + '</td>' +
       '</tr>';
@@ -984,7 +1090,7 @@ function v2ExpDetailRow(r, n, open) {
     ? origen + (dTiene && n.estado_draft ? ' · ' + v2Esc(n.estado_draft) : '') + (n.updated_by ? ' · ' + v2Esc(n.updated_by) : '')
     : 'sin diagnóstico todavía';
 
-  return '<tr class="v2e-detail' + (open ? ' open' : '') + '" data-ws="' + ws + '"><td colspan="15">' +
+  return '<tr class="v2e-detail' + (open ? ' open' : '') + '" data-ws="' + ws + '"><td colspan="17">' +
     '<div class="v2e-grid">' +
       '<div class="v2e-lbl">Objetivo</div><div>' + objetivo +
         '<div class="v2e-meta"><span>objetivo de negocio del cliente con Picker · compartido con la pestaña Cartera 2500</span></div></div>' +

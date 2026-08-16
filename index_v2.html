@@ -863,6 +863,7 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
     <div class="v2-kpi danger"><div class="v2-kpi-label">Alertas rojas</div><div class="v2-kpi-value" id="v2ExpAlertas">—</div><div class="v2-kpi-sub" id="v2ExpAlertasSub">—</div></div>
     <div class="v2-kpi"><div class="v2-kpi-label">Con plan confirmado</div><div class="v2-kpi-value" id="v2ExpPlan">—</div><div class="v2-kpi-sub" id="v2ExpPlanSub">—</div></div>
   </div>
+  <div id="v2ExpCorte" style="font-size:11px;color:#5b6b86;background:#f2f8fd;border-left:3px solid #00b8eb;padding:6px 10px;border-radius:3px;margin:0 0 10px">&nbsp;</div>
   <div class="v2-table-wrap">
     <table class="v2-table" id="v2ExpansionTable">
       <thead>
@@ -877,21 +878,23 @@ body { font-family:'Montserrat',sans-serif; background:#f0f4f8; color:var(--azul
           <th class="num">Mes ant</th>
           <th class="num">MTD</th>
           <th class="num v2-tooltip" data-tooltip="Numero grande = proy. cierre a ritmo 28d. Abajo = variacion a ritmo 7d.">Proy. cierre</th>
-          <th class="num">Crecim.</th>
-          <th class="num">Crec. %</th>
-          <th>Tend.</th>
+          <th class="num v2-tooltip" data-tooltip="Proy. cierre menos el mes anterior REESCALADO a la longitud de este mes. Sin ese reescalado, comparar un mes de 31 dias contra uno de 30 regala +3.3% de crecimiento que no existe (y de febrero a marzo regala +10.7%). Pasar el mouse por la celda muestra la banda entre el ritmo 28d y el 7d.">Crecim.</th>
+          <th class="num v2-tooltip" data-tooltip="Mismo criterio que Crecim., en porcentaje. Queda en blanco si el mes anterior no llego al minimo de muestra: con pocos pedidos el % es ruido.">Crec. %</th>
+          <th class="num v2-tooltip" data-tooltip="Revenue USD del mes anterior cerrado. Fuente canonica cfo.base_maestra_mat (revenue_usd), la misma del tracker de rollouts. Incluye tarifas de cancelacion y retorno, por eso no cuadra ride a ride.">$ mes ant</th>
+          <th class="num v2-tooltip" data-tooltip="Crecimiento en USD proyectado al cierre, mismo criterio normalizado que Crecim. OJO: puede apuntar al lado contrario que los rides cuando cambia el mix o el valor por pedido. No trae margen: los campos de costo del DW estan en cero desde junio-2026.">Δ $</th>
+          <th class="v2-tooltip" data-tooltip="Sube / Baja solo cuando las dos proyecciones (ritmo 28d y ritmo 7d) coinciden en el signo. Si se contradicen, queda 'Sin definir' en vez de fingir certeza.">Tend.</th>
           <th class="v2-tooltip" data-tooltip="Ultima reunion DETECTADA en el indice Fathom. COBERTURA PARCIAL: solo ve grabaciones de Antonio y matchea por nombre de cuenta. Vacio = no detectada, NO significa que el cliente este abandonado. 'marca' = reunion de la marca sin distinguir pais/sucursal.">Últ. reunión</th>
           <th class="v2-tooltip" data-tooltip="Diagnostico + hasta 3 acciones o bloqueos. Click en la fila para abrir y editar. El chip de color indica hace cuanto se actualizo; despues van los cupos usados y los bloqueos abiertos.">Plan</th>
         </tr>
       </thead>
       <tbody id="v2ExpansionBody">
-        <tr><td colspan="15" class="v2-empty">Cargando cuentas...</td></tr>
+        <tr><td colspan="17" class="v2-empty">Cargando cuentas...</td></tr>
       </tbody>
     </table>
   </div>
   <div class="v2-sub" style="padding:8px 0;line-height:1.6">
     Top 40 por rides del mes anterior cerrado (excluye demo/test) <strong>menos las 9 cuentas de Cartera 2500</strong>,
-    que se siguen en su propia pestaña. Expansión = proy. cierre supera el mes anterior.
+    que se siguen en su propia pestaña. <b>Crecimiento</b> = proy. cierre menos el mes anterior <i>reescalado a la longitud de este mes</i>: comparar totales de meses de distinto largo inventa hasta +10,7% de crecimiento que no existe. <b>Sin definir</b> = las proyecciones a ritmo 28d y 7d se contradicen; con este corte no se puede afirmar la dirección. Las columnas en $ salen de <code>cfo.base_maestra_mat</code> y van unos días detrás de los rides; no traen margen (los costos del DW están en cero desde junio-2026).
     Las cuentas sin AM asignado en el Hub aparecen igual, agrupadas bajo "Sin AM". Los KPIs recalculan segun el filtro. Update diario 7:48 AM.
     <br><strong>Últ. reunión</strong> tiene cobertura parcial: el índice Fathom solo tiene las grabaciones de Antonio, no las de Carlos ni Juan Xavier,
     y el match es por nombre de cuenta. Una celda vacía significa <em>no detectada</em>, no cliente abandonado.
